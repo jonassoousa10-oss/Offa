@@ -45,9 +45,16 @@ class MainActivity : Activity() {
     private lateinit var up: TextView
     private lateinit var statePill: TextView
     private lateinit var heroCircle: FrameLayout
-    private lateinit var importButton: Button
-    private lateinit var deleteButton: TextView
-    private var disclosed = false
+    private lateinit var operatorButton: Button
+    private lateinit var serverButton: Button
+    private lateinit var directoryStatus: TextView
+    private var allServers: List<ServerDirectory.Server> = emptyList()
+    private var selectedServerId: String? = null
+    private var loadingServers = false
+    private var provisioning = false
+    private val carriers = listOf("Automática", "Vivo", "Claro", "TIM", "Oi", "Outra")
+    private val carrierIds = listOf("auto", "vivo", "claro", "tim", "oi", "other")
+    private var carrierIndex = 0
 
     private val stateListener: (VpnSession.State, String) -> Unit = { s, message ->
         if (::status.isInitialized) renderState(s, message)
@@ -76,7 +83,11 @@ class MainActivity : Activity() {
         window.decorView.systemUiVisibility = 0
         buildLayout()
         renderState(VpnSession.state, VpnSession.details)
-        refreshProfile()
+        carrierIndex = getSharedPreferences("nexora_settings", MODE_PRIVATE)
+            .getInt("carrierIndex", 0).coerceIn(0, carriers.lastIndex)
+        selectedServerId = getSharedPreferences("nexora_settings", MODE_PRIVATE)
+            .getString("serverId", null)
+        loadServers()
         VpnSession.observe(stateListener)
         mainHandler.post(poll)
     }
@@ -159,7 +170,7 @@ class MainActivity : Activity() {
         hero.addView(heroCircle, LinearLayout.LayoutParams(dp(218), dp(218)))
         spacer(hero, 13)
         status = text("Desconectado", 23f, white, true).apply { gravity = Gravity.CENTER }
-        caption = text("Importe um perfil de servidor para começar", 12f, secondary).apply { gravity = Gravity.CENTER }
+        caption = text("Selecione uma operadora e um servidor", 12f, secondary).apply { gravity = Gravity.CENTER }
         hero.addView(status)
         spacer(hero, 6)
         hero.addView(caption)
@@ -192,38 +203,64 @@ class MainActivity : Activity() {
         spacer(body, 15)
 
         val serverCard = card(body)
-        val titleRow = row()
-        titleRow.addView(text("PERFIL DE CONEXÃO", 11f, secondary, true, 1.2f), LinearLayout.LayoutParams(0, -2, 1f))
-        titleRow.addView(text("WireGuard", 12f, mint, true))
-        serverCard.addView(titleRow)
+        serverCard.addView(text("SELECIONE SUA REDE", 11f, secondary, true, 1.2f))
         spacer(serverCard, 12)
-        currentProfile = text("Nenhum servidor configurado", 16f, white, true).apply {
-            maxLines = 2
-            ellipsize = TextUtils.TruncateAt.END
-        }
-        serverCard.addView(currentProfile)
-        spacer(serverCard, 5)
-        serverCard.addView(text("Arquivo .conf fornecido pelo administrador do servidor.", 12f, secondary))
-        spacer(serverCard, 14)
-        importButton = Button(this).apply {
-            text = "＋  Importar perfil"
+        serverCard.addView(text("Operadora", 12f, secondary))
+        spacer(serverCard, 6)
+        operatorButton = Button(this).apply {
             isAllCaps = false
-            textSize = 14f
+            setTextColor(white)
+            textSize = 15f
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            background = outlined(Color.rgb(48, 90, 95), 13)
+            setPadding(dp(15), 0, dp(15), 0)
+            setOnClickListener { chooseCarrier() }
+        }
+        serverCard.addView(operatorButton, LinearLayout.LayoutParams(-1, dp(50)))
+        spacer(serverCard, 13)
+        serverCard.addView(text("Servidor", 12f, secondary))
+        spacer(serverCard, 6)
+        serverButton = Button(this).apply {
+            isAllCaps = false
+            setTextColor(white)
+            textSize = 15f
+            gravity = Gravity.CENTER_VERTICAL or Gravity.START
+            background = outlined(Color.rgb(48, 90, 95), 13)
+            setPadding(dp(15), 0, dp(15), 0)
+            setOnClickListener { chooseServer() }
+        }
+        serverCard.addView(serverButton, LinearLayout.LayoutParams(-1, dp(50)))
+        spacer(serverCard, 10)
+        currentProfile = text("Sem servidor selecionado", 12f, mint)
+        serverCard.addView(currentProfile)
+        spacer(serverCard, 10)
+        directoryStatus = text("Carregando servidores…", 12f, secondary)
+        serverCard.addView(directoryStatus)
+        spacer(serverCard, 14)
+        val actions = row()
+        val refresh = Button(this).apply {
+            text = "↻ Atualizar"
+            isAllCaps = false
+            textSize = 12f
             setTextColor(mint)
             background = outlined(Color.rgb(48, 90, 95), 13)
-            setOnClickListener { importConfig() }
+            setOnClickListener { loadServers() }
         }
-        serverCard.addView(importButton, LinearLayout.LayoutParams(-1, dp(48)))
-        spacer(serverCard, 8)
-        deleteButton = text("Remover perfil", 12f, secondary).apply {
-            gravity = Gravity.CENTER
-            setPadding(0, dp(10), 0, dp(4))
-            setOnClickListener { removeProfile() }
+        actions.addView(refresh, LinearLayout.LayoutParams(0, dp(45), 1f))
+        val admin = Button(this).apply {
+            text = "⚙ Serviço"
+            isAllCaps = false
+            textSize = 12f
+            setTextColor(mint)
+            background = outlined(Color.rgb(48, 90, 95), 13)
+            setOnClickListener { configureDirectory() }
         }
-        serverCard.addView(deleteButton)
+        actions.addView(admin, LinearLayout.LayoutParams(0, dp(45), 1f).apply { leftMargin = dp(8) })
+        serverCard.addView(actions)
+        refreshControls()
         spacer(body, 15)
 
-        val statsCard = card(body)
+            val statsCard = card(body)
         statsCard.addView(text("TRÁFEGO DA VPN", 11f, secondary, true, 1.1f))
         spacer(statsCard, 13)
         val statsRow = row()
@@ -242,21 +279,21 @@ class MainActivity : Activity() {
         statsRow.addView(upBox, LinearLayout.LayoutParams(0, -2, 1f))
         statsCard.addView(statsRow)
         spacer(body, 24)
-        val footer = text("NEXORA VPN  ·  v0.1 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
+        val footer = text("NEXORA VPN  ·  v0.2 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
         footer.gravity = Gravity.CENTER
         body.addView(footer)
     }
 
     private fun toggleVpn() {
+        if (provisioning) return
         when (VpnSession.state) {
             VpnSession.State.CONNECTED -> VpnSession.disconnect()
             VpnSession.State.CONNECTING, VpnSession.State.DISCONNECTING -> Unit
             else -> {
-                if (!EncryptedProfileStore.exists(this)) {
-                    AlertDialog.Builder(this).setTitle("Configure um servidor")
-                        .setMessage("Importe primeiro um arquivo .conf de um servidor WireGuard autorizado. A VPN não cria acesso gratuito à operadora.")
-                        .setPositiveButton("Importar") { _, _ -> importConfig() }
-                        .setNegativeButton("Cancelar", null).show()
+                if (chosenServer() == null) {
+                    AlertDialog.Builder(this).setTitle("Selecione um servidor")
+                        .setMessage("Nenhum servidor Nexora está disponível. Atualize a lista ou configure o endereço do serviço com seu administrador. Não é necessário importar arquivos.")
+                        .setPositiveButton("OK", null).show()
                     return
                 }
                 val prefs = getSharedPreferences("nexora", MODE_PRIVATE)
@@ -266,7 +303,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showDisclosure() {
+        private fun showDisclosure() {
         AlertDialog.Builder(this)
             .setTitle("Como a Nexora VPN funciona")
             .setMessage("Ao conectar, a Nexora VPN estabelece um túnel criptografado e encaminha o tráfego do dispositivo para o servidor WireGuard que você escolheu. O aplicativo recebe metadados técnicos da conexão para mostrar o estado e os contadores de tráfego. Não vendemos dados nem coletamos seu histórico de navegação. A VPN não fornece franquia de dados móveis e o provedor do servidor pode observar metadados de tráfego. Deseja continuar?")
@@ -278,82 +315,164 @@ class MainActivity : Activity() {
 
     private fun requestVpnPermission() {
         val intent = VpnService.prepare(this)
-        if (intent == null) VpnSession.connect()
+        if (intent == null) beginProvision()
         else startActivityForResult(intent, REQ_VPN)
     }
 
-    private fun importConfig() {
-        if (VpnSession.state == VpnSession.State.CONNECTED) {
-            AlertDialog.Builder(this).setTitle("Desconecte primeiro")
-                .setMessage("Encerre a VPN antes de trocar o perfil para não interromper a sessão em andamento.")
+    @Deprecated("Legacy result callback for Android VPN authorization")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_VPN && resultCode == RESULT_OK) beginProvision()
+    }
+
+    private fun chosenServer(): ServerDirectory.Server? =
+        allServers.firstOrNull { it.id == selectedServerId && it.supports(carrierIds[carrierIndex]) }
+
+    private fun availableServers(): List<ServerDirectory.Server> =
+        allServers.filter { it.supports(carrierIds[carrierIndex]) }
+
+    private fun refreshControls() {
+        if (!::operatorButton.isInitialized || !::serverButton.isInitialized) return
+        operatorButton.text = carriers[carrierIndex] + "  ▾"
+        val chosen = chosenServer()
+        serverButton.text = (chosen?.name ?: "Selecionar servidor") + "  ▾"
+        serverButton.isEnabled = !loadingServers && availableServers().isNotEmpty() &&
+            VpnSession.state != VpnSession.State.CONNECTED && !provisioning
+        currentProfile.text = if (chosen != null) chosen.region + " • " + chosen.name
+            else "Escolha um servidor disponível para sua operadora."
+    }
+
+    private fun chooseCarrier() {
+        if (VpnSession.state == VpnSession.State.CONNECTED || provisioning) {
+            AlertDialog.Builder(this).setMessage("Desconecte antes de trocar a operadora.")
                 .setPositiveButton("OK", null).show()
             return
         }
-        val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "*/*"
-        }
-        startActivityForResult(picker, REQ_IMPORT)
-    }
-
-    @Deprecated("Legacy activity result used to avoid an additional runtime dependency")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK) return
-        if (requestCode == REQ_VPN) { VpnSession.connect(); return }
-        if (requestCode == REQ_IMPORT) {
-            val uri = data?.data ?: return
-            try {
-                val bytes = contentResolver.openInputStream(uri)?.use { stream ->
-                    stream.readNBytesCompat(65537)
-                } ?: error("Arquivo não pôde ser lido")
-                require(bytes.size <= 65536) { "Arquivo muito grande" }
-                EncryptedProfileStore.save(this, bytes)
-                bytes.fill(0)
-                val label = uri.lastPathSegment?.substringAfterLast('/')?.take(60) ?: "Meu servidor"
-                getSharedPreferences("nexora", MODE_PRIVATE).edit().putString("profileName", label).apply()
-                refreshProfile()
-                AlertDialog.Builder(this).setTitle("Perfil importado")
-                    .setMessage("Configuração validada e armazenada de forma criptografada. Já é possível tentar conectar ao seu servidor.")
-                    .setPositiveButton("OK", null).show()
-            } catch (_: Exception) {
-                AlertDialog.Builder(this).setTitle("Perfil inválido")
-                    .setMessage("Não foi possível importar o arquivo. Confirme que é um .conf WireGuard válido.")
-                    .setPositiveButton("OK", null).show()
-            }
-        }
-    }
-
-    private fun java.io.InputStream.readNBytesCompat(limit: Int): ByteArray {
-        val buffer = ByteArray(4096)
-        val out = java.io.ByteArrayOutputStream()
-        while (out.size() < limit) {
-            val read = read(buffer, 0, minOf(buffer.size, limit - out.size()))
-            if (read <= 0) break
-            out.write(buffer, 0, read)
-        }
-        return out.toByteArray()
-    }
-
-    private fun refreshProfile() {
-        val available = EncryptedProfileStore.exists(this)
-        currentProfile.text = if (available) getSharedPreferences("nexora", MODE_PRIVATE)
-            .getString("profileName", "Meu servidor WireGuard") else "Nenhum servidor configurado"
-        deleteButton.visibility = if (available) View.VISIBLE else View.GONE
-    }
-
-    private fun removeProfile() {
-        AlertDialog.Builder(this).setTitle("Remover servidor?")
-            .setMessage("A configuração e a chave privada armazenadas serão removidas deste aparelho.")
-            .setPositiveButton("Remover") { _, _ ->
-                EncryptedProfileStore.remove(this)
-                refreshProfile()
+        AlertDialog.Builder(this).setTitle("Escolha sua operadora")
+            .setSingleChoiceItems(carriers.toTypedArray(), carrierIndex) { dialog, index ->
+                carrierIndex = index
+                getSharedPreferences("nexora_settings", MODE_PRIVATE).edit()
+                    .putInt("carrierIndex", index).apply()
+                if (chosenServer() == null) selectedServerId = availableServers().firstOrNull()?.id
+                refreshControls()
+                dialog.dismiss()
             }.setNegativeButton("Cancelar", null).show()
     }
 
-    private fun about() {
+    private fun chooseServer() {
+        if (VpnSession.state == VpnSession.State.CONNECTED || provisioning) {
+            AlertDialog.Builder(this).setMessage("Desconecte antes de mudar de servidor.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val options = availableServers()
+        if (options.isEmpty()) {
+            loadServers()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Escolha seu servidor")
+            .setItems(options.map { it.name + " — " + it.region }.toTypedArray()) { _, index ->
+                selectedServerId = options[index].id
+                getSharedPreferences("nexora_settings", MODE_PRIVATE).edit()
+                    .putString("serverId", selectedServerId).apply()
+                refreshControls()
+            }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun loadServers() {
+        if (!::directoryStatus.isInitialized || loadingServers) return
+        val endpoint = ServerDirectory.url(this)
+        if (endpoint.isBlank()) {
+            allServers = emptyList()
+            directoryStatus.text = "Serviço ainda não configurado. Toque em ⚙ Serviço (administrador)."
+            refreshControls()
+            return
+        }
+        loadingServers = true
+        directoryStatus.text = "Consultando servidores seguros…"
+        refreshControls()
+        Thread {
+            val result = runCatching { ServerDirectory.list(applicationContext) }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                loadingServers = false
+                allServers = result.getOrDefault(emptyList())
+                if (chosenServer() == null) {
+                    selectedServerId = availableServers().firstOrNull()?.id
+                    getSharedPreferences("nexora_settings", MODE_PRIVATE).edit()
+                        .putString("serverId", selectedServerId).apply()
+                }
+                directoryStatus.text = if (result.isFailure)
+                    "Não foi possível consultar o serviço. Verifique o endereço ou a conexão."
+                else if (allServers.isEmpty())
+                    "Nenhum servidor publicado pelo administrador."
+                else
+                    allServers.size.toString() + " servidor(es) no catálogo • configuração automática"
+                refreshControls()
+            }
+        }.start()
+    }
+
+    private fun configureDirectory() {
+        if (VpnSession.state == VpnSession.State.CONNECTED || provisioning) {
+            AlertDialog.Builder(this).setMessage("Desconecte antes de alterar o serviço.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val input = android.widget.EditText(this).apply {
+            setSingleLine(true)
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or
+                android.text.InputType.TYPE_TEXT_VARIATION_URI
+            hint = "https://api.seu-dominio.com"
+            setText(ServerDirectory.url(this@MainActivity))
+            setPadding(dp(18), dp(10), dp(18), dp(10))
+        }
+        AlertDialog.Builder(this).setTitle("Serviço Nexora • administrador")
+            .setMessage("Informe o endereço HTTPS do catálogo e provisionamento Nexora. Seus usuários não precisarão importar configurações.")
+            .setView(input)
+            .setPositiveButton("Salvar") { _, _ ->
+                val result = runCatching { ServerDirectory.setUrl(this, input.text.toString()) }
+                if (result.isFailure) {
+                    AlertDialog.Builder(this).setMessage("Use um endereço HTTPS válido.")
+                        .setPositiveButton("OK", null).show()
+                } else {
+                    allServers = emptyList()
+                    selectedServerId = null
+                    loadServers()
+                }
+            }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun beginProvision() {
+        if (provisioning || VpnSession.state == VpnSession.State.CONNECTED) return
+        val server = chosenServer() ?: return
+        provisioning = true
+        status.text = "Preparando conexão…"
+        caption.text = "Solicitando configuração segura ao servidor"
+        switchButton.text = "AGUARDE…"
+        switchButton.isEnabled = false
+        refreshControls()
+        val operator = carrierIds[carrierIndex]
+        Thread {
+            val result = runCatching {
+                val bytes = ServerDirectory.provision(applicationContext, server, operator)
+                try { EncryptedProfileStore.save(applicationContext, bytes) }
+                finally { bytes.fill(0) }
+            }
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                provisioning = false
+                if (result.isSuccess) VpnSession.connect()
+                else renderState(VpnSession.State.ERROR,
+                    "O servidor não conseguiu preparar a VPN. Verifique a configuração do serviço.")
+                refreshControls()
+            }
+        }.start()
+    }
+
+        private fun about() {
         AlertDialog.Builder(this).setTitle("Nexora VPN · Primeira versão")
-            .setMessage("Cliente WireGuard Android independente.\n\n• Funciona em redes Wi-Fi e móveis com conectividade.\n• Requer um servidor VPN configurado e autorizado.\n• Não desbloqueia internet sem crédito e não supera bloqueios de operadoras automaticamente.\n• Os dados de sessão ficam protegidos pelo Android Keystore.\n\nEsta é uma versão inicial para testes e ainda não foi homologada para publicação.")
+            .setMessage("Nexora VPN v0.2 de teste.\n\nEscolha operadora e servidor. O administrador publica servidores autorizados por HTTPS. O telefone cria sua chave privada localmente.\n\nA VPN precisa de uma rede com acesso ao servidor e não fornece dados móveis gratuitos. Não inclui servidores ativos nesta versão de teste.")
             .setPositiveButton("Entendi", null).show()
     }
 
@@ -372,7 +491,7 @@ class MainActivity : Activity() {
             VpnSession.State.CONNECTED -> "● PROTEÇÃO ATIVA"
             VpnSession.State.CONNECTING -> "● CONECTANDO"
             VpnSession.State.DISCONNECTING -> "● DESCONECTANDO"
-            VpnSession.State.ERROR -> "● VERIFIQUE O PERFIL"
+            VpnSession.State.ERROR -> "● ERRO DE CONEXÃO"
             else -> "● DESCONECTADO"
         }
         statePill.setTextColor(if (active) mint else secondary)
@@ -382,10 +501,11 @@ class MainActivity : Activity() {
             VpnSession.State.DISCONNECTING -> "ENCERRANDO TÚNEL…"
             else -> "CONECTAR AGORA"
         }
-        switchButton.isEnabled = !busy
+        switchButton.isEnabled = !busy && !provisioning
         switchButton.alpha = if (busy) 0.65f else 1f
         power.alpha = if (active || !busy) 1f else 0.65f
         if (!active) { down.text = "0 B"; up.text = "0 B" }
+        refreshControls()
     }
 
     private fun networkName(): String {
