@@ -33,7 +33,7 @@ android {
 }
 dependencies {
     implementation("com.wireguard.android:tunnel:1.0.20260102")
-    implementation("com.github.mwiede:jsch:0.2.27")
+    implementation("com.github.mwiede:jsch:2.28.4")
     implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
