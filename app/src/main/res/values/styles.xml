@@ -1,0 +1,12 @@
+<resources>
+    <style name="NexoraTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#06111C</item>
+        <item name="android:navigationBarColor">#06111C</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#46E3BE</item>
+        <item name="android:windowBackground">#06111C</item>
+    </style>
+    <string name="app_name">Nexora VPN</string>
+</resources>

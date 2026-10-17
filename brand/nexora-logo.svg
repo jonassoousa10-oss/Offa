@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 240" role="img" aria-label="Nexora VPN logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#06111C" />
+      <stop offset="1" stop-color="#102B3A" />
+    </linearGradient>
+    <linearGradient id="mint" x1="0" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#6AFCDA" />
+      <stop offset="1" stop-color="#22B9A8" />
+    </linearGradient>
+  </defs>
+  <rect width="640" height="240" rx="34" fill="url(#bg)" />
+  <path d="M118 30L193 61 184 134C177 164 146 185 118 198 90 185 59 164 52 134L43 61Z" fill="#173C50" stroke="#204D5F" stroke-width="3"/>
+  <path d="M118 41L181 67 173 132C167 158 140 177 118 187 96 177 69 158 63 132L55 67Z" fill="url(#mint)"/>
+  <path d="M118 56L166 76 159 128C155 145 137 159 118 170 99 159 81 145 77 128L70 76Z" fill="#08202D" />
+  <path d="M91 136V95H103L133 123V95H145V142H133L103 113V142H91Z" fill="#5EF5CC" />
+  <text x="225" y="118" fill="#F1FBFC" font-family="Arial, Helvetica, sans-serif" font-size="60" font-weight="bold" letter-spacing="5">NEXORA</text>
+  <text x="228" y="156" fill="#64EBD1" font-family="Arial, Helvetica, sans-serif" font-size="21" font-weight="bold" letter-spacing="9">VPN</text>
+  <path d="M225 176H580" stroke="#24556A" stroke-width="2" />
+  <text x="227" y="202" fill="#86A3B6" font-family="Arial, Helvetica, sans-serif" font-size="16" letter-spacing="3">SECURE. FAST. CONNECTED.</text>
+</svg>
