@@ -29,6 +29,9 @@ android {
     kotlinOptions { jvmTarget = "17" }
     packaging {
         jniLibs { useLegacyPackaging = true }
+        resources {
+            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+        }
     }
 }
 dependencies {
