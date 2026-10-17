@@ -43,16 +43,23 @@ class DiagnosticsActivity : Activity() {
     private lateinit var address: EditText
     private lateinit var carrier: Spinner
     private lateinit var runButton: Button
+    private lateinit var accessButton: Button
     private lateinit var copyButton: Button
     private lateinit var summary: TextView
     private val resultViews = linkedMapOf<String, Pair<TextView, TextView>>()
     private val findings = linkedMapOf<String, NetworkDiagnostic.Finding>()
     private val keys = listOf("cellular", "dns", "https", "internet")
+    private val accessKeys = listOf("portal", "whatsapp", "telegram", "site")
+    private val allKeys = keys + accessKeys
     private val titles = mapOf(
         "cellular" to "1. Rede móvel selecionada",
         "dns" to "2. Resolução DNS",
         "https" to "3. HTTPS e certificado TLS",
-        "internet" to "4. Internet geral (2 destinos)"
+        "internet" to "4. Internet geral (2 destinos)",
+        "portal" to "5. URL escolhida / Vivo",
+        "whatsapp" to "6. Site WhatsApp",
+        "telegram" to "7. Site Telegram",
+        "site" to "8. Site independente / Wikipedia"
     )
     private val carriers = listOf("Vivo", "Claro", "TIM", "Oi", "Outra / Automática")
     private var working = false
@@ -199,6 +206,21 @@ class DiagnosticsActivity : Activity() {
             setOnClickListener { begin() }
         }
         body.addView(runButton, LinearLayout.LayoutParams(-1, dp(55)))
+        space(body, 10)
+        accessButton = Button(this).apply {
+            text = "TESTAR ACESSO A APPS E SITES"
+            isAllCaps = false
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(mint)
+            background = outlined()
+            setOnClickListener { beginDirectAccess() }
+        }
+        body.addView(accessButton, LinearLayout.LayoutParams(-1, dp(55)))
+        space(body, 10)
+        body.addView(label(
+            "Teste direto pela rede móvel: URL escolhida, site WhatsApp, site Telegram e Wikipedia. Não envia mensagens, não usa o portal Vivo como túnel e não simula conexão.",
+            12f, secondary))
         space(body, 14)
 
         val resultCard = panel(body)
@@ -211,6 +233,23 @@ class DiagnosticsActivity : Activity() {
             val line = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val title = label(titles[key].orEmpty() + "  •  Aguardando", 14f, white, true)
             val detail = label("—", 12f, secondary)
+            line.addView(title)
+            space(line, 5)
+            line.addView(detail)
+            resultCard.addView(line)
+            resultViews[key] = title to detail
+            space(resultCard, 18)
+        }
+        resultCard.addView(label("TESTE DIRETO DE ACESSO", 12f, mint, true))
+        space(resultCard, 7)
+        resultCard.addView(label(
+            "Responder por HTTPS significa apenas que a página web é alcançável; não prova que mensagens de WhatsApp ou Telegram funcionem.",
+            12f, secondary))
+        space(resultCard, 14)
+        for (key in accessKeys) {
+            val line = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val title = label(titles[key].orEmpty() + "  •  Não testado", 14f, white, true)
+            val detail = label("Toque em TESTAR ACESSO A APPS E SITES.", 12f, secondary)
             line.addView(title)
             space(line, 5)
             line.addView(detail)
@@ -254,16 +293,19 @@ class DiagnosticsActivity : Activity() {
             .apply()
         working = true
         runButton.isEnabled = false
+        accessButton.isEnabled = false
         runButton.text = "TESTANDO REDE MÓVEL…"
         copyButton.isEnabled = false
         findings.clear()
         summary.text = "Teste real em andamento. Wi-Fi e VPN não serão usados."
-        for (key in keys) {
+        for (key in allKeys) {
             resultViews[key]?.first?.apply {
-                text = titles[key].orEmpty() + "  •  Aguardando"
+                text = titles[key].orEmpty() +
+                    (if (key in keys) "  •  Aguardando" else "  •  Não testado")
                 setTextColor(white)
             }
-            resultViews[key]?.second?.text = "—"
+            resultViews[key]?.second?.text =
+                if (key in keys) "—" else "Execute o teste de acesso separadamente."
         }
         worker.execute {
             try {
@@ -283,6 +325,7 @@ class DiagnosticsActivity : Activity() {
                     if (!isFinishing && !isDestroyed) {
                         working = false
                         runButton.isEnabled = true
+                        accessButton.isEnabled = true
                         runButton.text = "REPETIR DIAGNÓSTICO"
                         copyButton.isEnabled = findings.isNotEmpty()
                         if (findings.size == keys.size) {
@@ -290,6 +333,72 @@ class DiagnosticsActivity : Activity() {
                                 SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("pt", "BR"))
                                     .format(Date()) +
                                 " • Operadora informada: " + carrier.selectedItem.toString()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    private fun beginDirectAccess() {
+        if (working) return
+        if (VpnSession.state == VpnSession.State.CONNECTED) {
+            AlertDialog.Builder(this).setTitle("Desconecte a VPN antes")
+                .setMessage("O teste precisa medir a rede móvel sem interferência do túnel.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val target = try { NetworkDiagnostic.validate(address.text.toString()) }
+        catch (error: IllegalArgumentException) {
+            address.error = error.message
+            address.requestFocus()
+            return
+        }
+        getSharedPreferences("nexora_diagnostics", MODE_PRIVATE).edit()
+            .putString("url", target.url.toExternalForm())
+            .putInt("carrier", carrier.selectedItemPosition)
+            .apply()
+        findings.clear()
+        working = true
+        runButton.isEnabled = false
+        accessButton.isEnabled = false
+        accessButton.text = "VERIFICANDO SITES…"
+        copyButton.isEnabled = false
+        summary.text = "Verificando sites reais pela rede celular (não Wi-Fi)."
+        for (key in allKeys) {
+            resultViews[key]?.first?.apply {
+                setTextColor(white)
+                text = titles[key].orEmpty() +
+                    if (key in accessKeys) "  •  Aguardando" else "  •  Não executado"
+            }
+            resultViews[key]?.second?.text =
+                if (key in accessKeys) "Aguardando resposta HTTPS…" else "Este teste não foi solicitado."
+        }
+        worker.execute {
+            try {
+                NetworkDiagnostic.runDirectAccess(applicationContext, target) { key, finding ->
+                    runOnUiThread {
+                        if (!isFinishing && !isDestroyed) applyFinding(key, finding)
+                    }
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed)
+                        summary.text = "Falha no teste: " + error.javaClass.simpleName
+                }
+            } finally {
+                runOnUiThread {
+                    if (!isFinishing && !isDestroyed) {
+                        working = false
+                        runButton.isEnabled = true
+                        accessButton.isEnabled = true
+                        accessButton.text = "REPETIR TESTE DE ACESSO"
+                        copyButton.isEnabled = findings.isNotEmpty()
+                        if (accessKeys.all { findings.containsKey(it) }) {
+                            summary.text = "Teste direto concluído • " +
+                                SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale("pt", "BR"))
+                                    .format(Date()) + " • " + carrier.selectedItem.toString()
                         }
                     }
                 }
@@ -326,7 +435,7 @@ class DiagnosticsActivity : Activity() {
             "Rota: rede móvel do Android (não Wi-Fi)",
             ""
         )
-        for (key in keys) {
+        for (key in allKeys) {
             val finding = findings[key]
             lines.add(titles[key].orEmpty() + ": " + (finding?.verdict?.name ?: "NÃO TESTADO"))
             lines.add(finding?.detail ?: "Aguardando")
