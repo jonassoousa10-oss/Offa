@@ -268,6 +268,36 @@ class DiagnosticsActivity : Activity() {
         }
         resultCard.addView(copyButton, LinearLayout.LayoutParams(-1, dp(48)))
         space(body, 14)
+        val manualCard = panel(body)
+        manualCard.addView(label("TESTAR MENSAGENS MANUALMENTE", 12f, mint, true))
+        space(manualCard, 7)
+        manualCard.addView(label(
+            "Abra um aplicativo e envie você mesmo uma mensagem de teste para alguém que concorde ou para sua própria conversa. Desative o Wi-Fi. A conexão do aplicativo não é criada nem alterada pelo Nexora.",
+            12f, secondary))
+        space(manualCard, 10)
+        val openRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        val openWhatsApp = Button(this).apply {
+            text = "Abrir WhatsApp"
+            textSize = 12f
+            isAllCaps = false
+            setTextColor(mint)
+            background = outlined()
+            setOnClickListener { openMessagingApp("com.whatsapp", "WhatsApp") }
+        }
+        openRow.addView(openWhatsApp, LinearLayout.LayoutParams(0, dp(48), 1f))
+        val openTelegram = Button(this).apply {
+            text = "Abrir Telegram"
+            textSize = 12f
+            isAllCaps = false
+            setTextColor(mint)
+            background = outlined()
+            setOnClickListener { openMessagingApp("org.telegram.messenger", "Telegram") }
+        }
+        openRow.addView(openTelegram, LinearLayout.LayoutParams(0, dp(48), 1f).apply {
+            leftMargin = dp(8)
+        })
+        manualCard.addView(openRow)
+        space(body, 14)
         body.addView(label(
             "Os testes usam exclusivamente a rede celular solicitada ao Android, com DNS próprio da rede e HTTPS com certificado verificado. O sucesso do portal da Vivo não significa que internet geral ou VPN estejam disponíveis.",
             11f, secondary))
@@ -444,6 +474,23 @@ class DiagnosticsActivity : Activity() {
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(ClipData.newPlainText("Nexora diagnóstico", lines.joinToString("\n")))
         android.widget.Toast.makeText(this, "Relatório copiado", android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    private fun openMessagingApp(packageId: String, name: String) {
+        val launcher = packageManager.getLaunchIntentForPackage(packageId)
+        if (launcher == null) {
+            AlertDialog.Builder(this).setTitle(name)
+                .setMessage("Não foi possível abrir o aplicativo. Confirme se ele está instalado e abra manualmente.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        try {
+            startActivity(launcher)
+        } catch (_: Exception) {
+            AlertDialog.Builder(this).setMessage("Abra " + name +
+                " diretamente na tela inicial do Android para o teste manual.")
+                .setPositiveButton("OK", null).show()
+        }
     }
 
     private fun panel(body: LinearLayout): LinearLayout {
