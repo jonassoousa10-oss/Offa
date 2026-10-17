@@ -5,9 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.os.Build
 import android.os.SystemClock
-import java.net.HttpURLConnection
 import java.net.URL
 import java.net.UnknownHostException
 import java.net.SocketTimeoutException
@@ -35,8 +33,11 @@ object NetworkDiagnostic {
         val u = try { URL(trimmed) } catch (_: Exception) {
             throw IllegalArgumentException("Endereço inválido.")
         }
+        val uri = try { u.toURI() } catch (_: Exception) {
+            throw IllegalArgumentException("URL HTTPS inválida.")
+        }
         require(u.protocol.equals("https", true) && !u.host.isNullOrBlank() &&
-                u.toURI().userInfo == null && u.port in -1..65535 && u.port != 0) {
+                uri.userInfo == null && u.port in -1..65535 && u.port != 0) {
             "Use HTTPS com domínio válido (ex.: https://www.vivo.com.br)."
         }
         require(!u.host.contains(' ') && !u.host.contains('\n')) { "Domínio inválido." }
@@ -49,7 +50,7 @@ object NetworkDiagnostic {
         val network = try { manager.obtain() } catch (_: SecurityException) { null }
         if (network == null) {
             report("cellular", Finding(Verdict.FAIL,
-                "Rede móvel indisponível. Ative dados móveis, escolha o chip de dados no Android e tente novamente. Wi-Fi não será usado."))
+                "Não foi possível selecionar a rede móvel para teste. " + manager.diagnostics + " Wi-Fi não será usado."))
             report("dns", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
             report("https", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
             report("internet", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
@@ -67,7 +68,7 @@ object NetworkDiagnostic {
             }
             val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
             report("cellular", Finding(Verdict.PASS,
-                "Rede de dados móveis encontrada e usada nos testes. Android confirma internet geral: " +
+                "Rede móvel selecionada (#" + network.toString() + ") sem exigir acesso validado. Android confirma internet geral: " +
                     (if (validated) "sim" else "não ou desconhecido") +
                     ". O chip de dados é escolhido nas configurações do Android."))
             val start = SystemClock.elapsedRealtime()
@@ -167,31 +168,82 @@ object NetworkDiagnostic {
     }
 
     private class CellularSelection(private val cm: ConnectivityManager) {
+        var diagnostics = "O Android não forneceu uma rede de dados móveis a este aplicativo."
+            private set
         private var callback: ConnectivityManager.NetworkCallback? = null
+
+        /**
+         * v0.3 tried requestNetwork(), which may require CHANGE_NETWORK_STATE,
+         * and filtered out captive/no-credit networks with NET_CAPABILITY_INTERNET.
+         * Either condition could produce a false "no cellular network" result.
+         *
+         * Read already-connected networks first. This needs ACCESS_NETWORK_STATE.
+         * Do not require NET_CAPABILITY_VALIDATED or INTERNET on the mobile network:
+         * a zero-rated portal may remain reachable without either capability.
+         */
+        private fun existing(): Network? {
+            val all = cm.allNetworks.toList()
+            val mobile = all.filter { network ->
+                try {
+                    cm.getNetworkCapabilities(network)
+                        ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+                } catch (_: SecurityException) { false }
+            }
+            val active = cm.activeNetwork
+            val preferred = mobile.firstOrNull { it == active }
+                ?: mobile.firstOrNull {
+                    cm.getNetworkCapabilities(it)
+                        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+                }
+                ?: mobile.firstOrNull()
+            diagnostics = if (preferred != null)
+                "Rede móvel Android identificada (" + mobile.size +
+                    " disponível(is), rede #" + preferred.toString() + ")."
+            else "O Android expôs " + all.size +
+                " rede(s), mas nenhuma com transporte CELULAR. " +
+                "Confirme os dados móveis e o SIM padrão no Android."
+            return preferred
+        }
+
         fun obtain(): Network? {
-            // Request the mobile data network even if Wi-Fi is Android's default route.
-            val found = AtomicReference<Network?>()
+            try {
+                existing()?.let { return it }
+            } catch (error: SecurityException) {
+                diagnostics = "Android negou acesso às informações de rede: " +
+                    error.javaClass.simpleName
+                return null
+            }
+
+            // Passive observation only; unlike requestNetwork(), this does
+            // not trigger a new network or require CHANGE_NETWORK_STATE.
+            val selected = AtomicReference<Network?>()
             val ready = CountDownLatch(1)
             val request = NetworkRequest.Builder()
                 .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)
                 .build()
             val cb = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    found.set(network)
+                    selected.set(network)
                     ready.countDown()
                 }
-                override fun onUnavailable() { ready.countDown() }
             }
-            callback = cb
             try {
-                cm.requestNetwork(request, cb, 8500)
-                ready.await(9, TimeUnit.SECONDS)
-            } catch (_: Exception) {
-                close()
-                return null
+                callback = cb
+                cm.registerNetworkCallback(request, cb)
+                ready.await(4, TimeUnit.SECONDS)
+                val mobile = selected.get()
+                if (mobile != null) {
+                    diagnostics = "Rede celular encontrada pelo observador Android (#" +
+                        mobile.toString() + ")."
+                    return mobile
+                }
+                return existing()
+            } catch (error: Exception) {
+                diagnostics = "Sem rede celular acessível ao diagnóstico. " +
+                    "Observador: " + error.javaClass.simpleName + ". " + diagnostics
+                return try { existing() } catch (_: Exception) { null }
             }
-            return found.get()
         }
 
         fun close() {
