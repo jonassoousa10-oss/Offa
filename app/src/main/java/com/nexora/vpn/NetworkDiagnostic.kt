@@ -157,7 +157,7 @@ object NetworkDiagnostic {
             if (!visited.add(current.toExternalForm())) {
                 return Finding(Verdict.PARTIAL, "Redirecionamento em círculo. " + chain.joinToString(" → "))
             }
-            if (current.protocol != "https" || current.userInfo != null) {
+            if (!isHttpsWithoutUserInfo(current)) {
                 return Finding(Verdict.PARTIAL,
                     "Redirecionamento não HTTPS bloqueado: " + current.host.take(100))
             }
@@ -187,7 +187,7 @@ object NetworkDiagnostic {
                         return Finding(Verdict.PARTIAL,
                             "Redirecionamento inválido. " + chain.joinToString(" → "))
                     }
-                    if (next.protocol != "https" || next.userInfo != null) {
+                    if (!isHttpsWithoutUserInfo(next)) {
                         return Finding(Verdict.PARTIAL,
                             "Redirecionamento para conexão não HTTPS recusado. " +
                             chain.joinToString(" → "))
@@ -212,6 +212,12 @@ object NetworkDiagnostic {
             }
         }
         return Finding(Verdict.PARTIAL, "Não foi possível concluir o teste HTTPS.")
+    }
+
+    private fun isHttpsWithoutUserInfo(url: URL): Boolean = try {
+        url.protocol.equals("https", true) && url.toURI().userInfo == null
+    } catch (_: Exception) {
+        false
     }
 
     private fun checkTls(network: Network, url: URL): Finding {
