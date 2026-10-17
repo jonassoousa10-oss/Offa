@@ -103,7 +103,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(28), dp(22), dp(34))
         }
-        scroll.addView(body, ScrollView.LayoutParams(-1, -2))
+        scroll.addView(body, FrameLayout.LayoutParams(-1, -2))
         setContentView(scroll)
 
         val brandRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
