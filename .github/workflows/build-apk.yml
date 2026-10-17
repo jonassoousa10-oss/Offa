@@ -1,7 +1,7 @@
-name: Build Nexora VPN v0.3.2 Direct Access Diagnostics
+name: Build Nexora VPN v0.3.3 Free WireGuard Test
 on:
   push:
-    branches: [nexora-v032-direct-access-tests-20261017]
+    branches: [nexora-v033-free-wireguard-test-20261017]
   workflow_dispatch:
 jobs:
   android-build:
@@ -30,7 +30,7 @@ jobs:
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nexora-vpn-v0.3.2-testes-acesso
+          name: nexora-vpn-v0.3.3-wireguard-gratis
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
