@@ -226,6 +226,20 @@ class MainActivity : Activity() {
         }
         body.addView(diagnosticsButton, LinearLayout.LayoutParams(-1, dp(53)))
         spacer(body, 17)
+        val sshButton = Button(this).apply {
+            text = "⌁  SSH / PROXY • MODO EXPERIMENTAL"
+            isAllCaps = false
+            textSize = 13f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextColor(mint)
+            background = outlined(Color.rgb(48, 90, 95), 15)
+            setOnClickListener {
+                startActivity(Intent(this@MainActivity, SshProxyActivity::class.java))
+            }
+        }
+        body.addView(sshButton, LinearLayout.LayoutParams(-1, dp(53)))
+        spacer(body, 17)
+
 
         val freeCard = card(body)
         freeCard.addView(text("TESTAR VPN GRÁTIS • WIREGUARD", 12f, mint, true))
@@ -388,7 +402,7 @@ class MainActivity : Activity() {
         statsRow.addView(upBox, LinearLayout.LayoutParams(0, -2, 1f))
         statsCard.addView(statsRow)
         spacer(body, 24)
-        val footer = text("NEXORA VPN  ·  v0.3.4 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
+        val footer = text("NEXORA VPN  ·  v0.4 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
         footer.gravity = Gravity.CENTER
         body.addView(footer)
     }
