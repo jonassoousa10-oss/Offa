@@ -21,6 +21,9 @@
         android:supportsRtl="true"
         android:theme="@style/NexoraTheme">
         <activity
+            android:name=".SshProxyActivity"
+            android:exported="false" />
+        <activity
             android:name=".DiagnosticsActivity"
             android:exported="false" />
         <activity
