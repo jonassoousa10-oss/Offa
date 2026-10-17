@@ -108,6 +108,112 @@ object NetworkDiagnostic {
         }
     }
 
+
+    /**
+     * Safe direct-access checks. Uses the same Android cellular Network selected
+     * for the normal diagnostic. Does not proxy, spoof hosts, open a VPN tunnel
+     * or send chat messages. HTTPS websites != messaging service availability.
+     */
+    fun runDirectAccess(context: Context, target: Target, report: (String, Finding) -> Unit) {
+        val destinations = listOf(
+            "portal" to target.url,
+            "whatsapp" to URL("https://www.whatsapp.com/"),
+            "telegram" to URL("https://telegram.org/"),
+            "site" to URL("https://www.wikipedia.org/")
+        )
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val selector = CellularSelection(cm)
+        try {
+            val network = selector.obtain()
+            if (network == null ||
+                cm.getNetworkCapabilities(network)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) != true) {
+                val error = "Rede celular não identificada. " + selector.diagnostics +
+                    " Nenhum site foi testado; Wi-Fi não foi utilizado."
+                for (entry in destinations) {
+                    report(entry.first, Finding(Verdict.SKIPPED, error))
+                }
+                return
+            }
+            for (entry in destinations) {
+                val finding = traceHttps(network, entry.second)
+                report(entry.first, finding)
+            }
+        } finally {
+            selector.close()
+        }
+    }
+
+    /**
+     * Follow a small number of standard HTTPS redirects while preserving
+     * Android CA validation and hostname verification. No alternate host/SNI.
+     */
+    private fun traceHttps(network: Network, original: URL): Finding {
+        var current = original
+        val chain = mutableListOf<String>()
+        val visited = mutableSetOf<String>()
+        val started = SystemClock.elapsedRealtime()
+        for (index in 0..3) {
+            if (!visited.add(current.toExternalForm())) {
+                return Finding(Verdict.PARTIAL, "Redirecionamento em círculo. " + chain.joinToString(" → "))
+            }
+            if (current.protocol != "https" || current.userInfo != null) {
+                return Finding(Verdict.PARTIAL,
+                    "Redirecionamento não HTTPS bloqueado: " + current.host.take(100))
+            }
+            val conn = try {
+                network.openConnection(current) as HttpsURLConnection
+            } catch (error: Exception) {
+                return Finding(Verdict.FAIL, "Não alcançou " + current.host + ": " + reason(error))
+            }
+            try {
+                prepare(conn)
+                val code = conn.responseCode
+                // TLS validation is enabled via platform defaults.
+                conn.cipherSuite
+                chain.add(current.host.take(80) + " (HTTP " + code + ")")
+                if (code in 300..399) {
+                    val location = conn.getHeaderField("Location")
+                    if (location.isNullOrBlank()) {
+                        return Finding(Verdict.PARTIAL,
+                            "Redirecionamento HTTP " + code + " sem destino. " +
+                            chain.joinToString(" → "))
+                    }
+                    if (index >= 3) {
+                        return Finding(Verdict.PARTIAL,
+                            "Limite de 3 redirecionamentos. " + chain.joinToString(" → "))
+                    }
+                    val next = try { URL(current, location) } catch (_: Exception) {
+                        return Finding(Verdict.PARTIAL,
+                            "Redirecionamento inválido. " + chain.joinToString(" → "))
+                    }
+                    if (next.protocol != "https" || next.userInfo != null) {
+                        return Finding(Verdict.PARTIAL,
+                            "Redirecionamento para conexão não HTTPS recusado. " +
+                            chain.joinToString(" → "))
+                    }
+                    current = next
+                    continue
+                }
+                val latency = SystemClock.elapsedRealtime() - started
+                val details = chain.joinToString(" → ") + "; " + latency + " ms. "
+                return when {
+                    code in 200..299 -> Finding(Verdict.PASS,
+                        details + "Página HTTPS respondeu. Isso NÃO comprova que mensagens do aplicativo funcionam.")
+                    else -> Finding(Verdict.PARTIAL,
+                        details + "Servidor respondeu, mas não forneceu a página normalmente.")
+                }
+            } catch (error: Exception) {
+                val prior = if (chain.isEmpty()) "" else chain.joinToString(" → ") + ". "
+                return Finding(Verdict.FAIL,
+                    prior + "Falha em " + current.host + ": " + reason(error))
+            } finally {
+                conn.disconnect()
+            }
+        }
+        return Finding(Verdict.PARTIAL, "Não foi possível concluir o teste HTTPS.")
+    }
+
     private fun checkTls(network: Network, url: URL): Finding {
         val start = SystemClock.elapsedRealtime()
         val connection = try { network.openConnection(url) as HttpsURLConnection }
