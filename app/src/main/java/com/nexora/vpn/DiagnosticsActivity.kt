@@ -304,12 +304,14 @@ class DiagnosticsActivity : Activity() {
             NetworkDiagnostic.Verdict.PASS -> "OK"
             NetworkDiagnostic.Verdict.PARTIAL -> "PARCIAL"
             NetworkDiagnostic.Verdict.FAIL -> "FALHOU"
+            NetworkDiagnostic.Verdict.SKIPPED -> "NÃO EXECUTADO"
         }
         pair.first.text = titles[key].orEmpty() + "  •  " + word
         pair.first.setTextColor(when(finding.verdict) {
             NetworkDiagnostic.Verdict.PASS -> mint
             NetworkDiagnostic.Verdict.PARTIAL -> yellow
             NetworkDiagnostic.Verdict.FAIL -> red
+            NetworkDiagnostic.Verdict.SKIPPED -> secondary
         })
         pair.second.text = finding.detail
         copyButton.isEnabled = true
