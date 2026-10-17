@@ -9,8 +9,8 @@ android {
         applicationId = "com.nexora.vpn"
         minSdk = 24
         targetSdk = 35
-        versionCode = 7
-        versionName = "0.3.4-test"
+        versionCode = 8
+        versionName = "0.4.0-test"
     }
     buildFeatures { buildConfig = true }
     defaultConfig {
@@ -33,5 +33,7 @@ android {
 }
 dependencies {
     implementation("com.wireguard.android:tunnel:1.0.20260102")
+    implementation("com.github.mwiede:jsch:0.2.27")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.78.1")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }
