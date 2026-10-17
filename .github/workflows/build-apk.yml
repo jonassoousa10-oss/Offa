@@ -1,7 +1,7 @@
-name: Build Nexora VPN v0.3.4 Handshake Health
+name: Build Nexora VPN v0.4 SSH SOCKS5 Experimental
 on:
   push:
-    branches: [nexora-v034-wireguard-handshake-health-20261017]
+    branches: [nexora-v040-ssh-proxy-test-20261017]
   workflow_dispatch:
 jobs:
   android-build:
@@ -30,7 +30,7 @@ jobs:
       - name: Publish APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: nexora-vpn-v0.3.4-handshake-health
+          name: nexora-vpn-v0.4-ssh-socks5-test
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 7
