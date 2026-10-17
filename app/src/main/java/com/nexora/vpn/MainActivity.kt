@@ -26,6 +26,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import java.io.ByteArrayOutputStream
+import java.net.URL
+import javax.net.ssl.HttpsURLConnection
 import java.util.Locale
 
 class MainActivity : Activity() {
@@ -48,6 +51,9 @@ class MainActivity : Activity() {
     private lateinit var operatorButton: Button
     private lateinit var serverButton: Button
     private lateinit var directoryStatus: TextView
+    private lateinit var freeProfileStatus: TextView
+    private lateinit var verifyButton: Button
+    private lateinit var verifyStatus: TextView
     private var allServers: List<ServerDirectory.Server> = emptyList()
     private var selectedServerId: String? = null
     private var loadingServers = false
@@ -88,6 +94,7 @@ class MainActivity : Activity() {
         selectedServerId = getSharedPreferences("nexora_settings", MODE_PRIVATE)
             .getString("serverId", null)
         loadServers()
+        refreshFreeProfile()
         VpnSession.observe(stateListener)
         mainHandler.post(poll)
     }
@@ -203,6 +210,74 @@ class MainActivity : Activity() {
         body.addView(diagnosticsButton, LinearLayout.LayoutParams(-1, dp(53)))
         spacer(body, 17)
 
+        val freeCard = card(body)
+        freeCard.addView(text("TESTAR VPN GRÁTIS • WIREGUARD", 12f, mint, true))
+        spacer(freeCard, 9)
+        freeCard.addView(text(
+            "Sem Node.js nem VPS: crie uma configuração pessoal num provedor gratuito, importe o arquivo .conf uma vez e use o botão CONECTAR AGORA. O perfil fica criptografado neste aparelho.",
+            12f, white))
+        spacer(freeCard, 12)
+        val providers = row()
+        val jantit = Button(this).apply {
+            text = "Brasil grátis"
+            isAllCaps = false
+            textSize = 13f
+            setTextColor(mint)
+            background = outlined(Color.rgb(48, 90, 95), 13)
+            setOnClickListener { openProvider("https://www.vpnjantit.com/create-free-account?server=br3&type=WireGuard") }
+        }
+        providers.addView(jantit, LinearLayout.LayoutParams(0, dp(47), 1f))
+        val proton = Button(this).apply {
+            text = "Proton VPN grátis"
+            isAllCaps = false
+            textSize = 13f
+            setTextColor(mint)
+            background = outlined(Color.rgb(48, 90, 95), 13)
+            setOnClickListener { openProvider("https://account.protonvpn.com/") }
+        }
+        providers.addView(proton, LinearLayout.LayoutParams(0, dp(47), 1f).apply {
+            leftMargin = dp(8)
+        })
+        freeCard.addView(providers)
+        spacer(freeCard, 9)
+        val importProfileButton = Button(this).apply {
+            text = "IMPORTAR CONFIGURAÇÃO .CONF"
+            isAllCaps = false
+            textSize = 13f
+            typeface = Typeface.create("sans-serif-medium", Typeface.BOLD)
+            setTextColor(bg)
+            background = rounded(mint, 14)
+            setOnClickListener { importFreeProfile() }
+        }
+        freeCard.addView(importProfileButton, LinearLayout.LayoutParams(-1, dp(50)))
+        spacer(freeCard, 8)
+        freeProfileStatus = text("Nenhum perfil gratuito importado.", 12f, secondary)
+        freeCard.addView(freeProfileStatus)
+        spacer(freeCard, 8)
+        val clearFree = Button(this).apply {
+            text = "Remover perfil de teste"
+            isAllCaps = false
+            textSize = 12f
+            setTextColor(secondary)
+            background = outlined(Color.rgb(48, 90, 95), 12)
+            setOnClickListener { removeFreeProfile() }
+        }
+        freeCard.addView(clearFree, LinearLayout.LayoutParams(-1, dp(43)))
+        spacer(freeCard, 13)
+        verifyButton = Button(this).apply {
+            text = "VERIFICAR INTERNET APÓS CONECTAR"
+            isAllCaps = false
+            textSize = 12f
+            setTextColor(mint)
+            background = outlined(Color.rgb(48, 90, 95), 12)
+            setOnClickListener { verifyVpnInternet() }
+        }
+        freeCard.addView(verifyButton, LinearLayout.LayoutParams(-1, dp(46)))
+        spacer(freeCard, 8)
+        verifyStatus = text("Túnel ativo não garante acesso. Faça a verificação após conectar.", 12f, secondary)
+        freeCard.addView(verifyStatus)
+        spacer(body, 17)
+
         val networkCard = card(body)
         val netTop = row()
         netTop.addView(text("◉", 18f, mint, true))
@@ -293,7 +368,7 @@ class MainActivity : Activity() {
         statsRow.addView(upBox, LinearLayout.LayoutParams(0, -2, 1f))
         statsCard.addView(statsRow)
         spacer(body, 24)
-        val footer = text("NEXORA VPN  ·  v0.3 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
+        val footer = text("NEXORA VPN  ·  v0.3.3 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
         footer.gravity = Gravity.CENTER
         body.addView(footer)
     }
@@ -304,9 +379,9 @@ class MainActivity : Activity() {
             VpnSession.State.CONNECTED -> VpnSession.disconnect()
             VpnSession.State.CONNECTING, VpnSession.State.DISCONNECTING -> Unit
             else -> {
-                if (chosenServer() == null) {
-                    AlertDialog.Builder(this).setTitle("Selecione um servidor")
-                        .setMessage("Nenhum servidor Nexora está disponível. Atualize a lista ou configure o endereço do serviço com seu administrador. Não é necessário importar arquivos.")
+                if (!freeProfileSelected() && chosenServer() == null) {
+                    AlertDialog.Builder(this).setTitle("Configure a VPN")
+                        .setMessage("Para testar sem VPS nem Node.js, obtenha uma configuração WireGuard pessoal gratuita no botão Brasil grátis ou Proton VPN e importe o .conf acima. Ou configure um servidor Nexora autorizado.")
                         .setPositiveButton("OK", null).show()
                     return
                 }
@@ -329,14 +404,161 @@ class MainActivity : Activity() {
 
     private fun requestVpnPermission() {
         val intent = VpnService.prepare(this)
-        if (intent == null) beginProvision()
+        if (intent == null) connectSelectedVpn()
         else startActivityForResult(intent, REQ_VPN)
     }
 
     @Deprecated("Legacy result callback for Android VPN authorization")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_VPN && resultCode == RESULT_OK) beginProvision()
+        if (requestCode == REQ_VPN && resultCode == RESULT_OK) {
+            connectSelectedVpn()
+        } else if (requestCode == REQ_IMPORT && resultCode == RESULT_OK) {
+            val uri = data?.data ?: return
+            if (VpnSession.state != VpnSession.State.DISCONNECTED &&
+                VpnSession.state != VpnSession.State.ERROR) {
+                AlertDialog.Builder(this).setMessage("Desconecte antes de trocar a configuração.")
+                    .setPositiveButton("OK", null).show()
+                return
+            }
+            try {
+                val bytes = contentResolver.openInputStream(uri)?.use { stream ->
+                    val out = ByteArrayOutputStream()
+                    val buffer = ByteArray(4096)
+                    while (out.size() < 65537) {
+                        val read = stream.read(buffer, 0, minOf(buffer.size, 65537 - out.size()))
+                        if (read < 0) break
+                        if (read == 0) continue
+                        out.write(buffer, 0, read)
+                    }
+                    out.toByteArray()
+                } ?: error("Arquivo não encontrado")
+                try {
+                    require(bytes.isNotEmpty() && bytes.size <= 65536)
+                    EncryptedProfileStore.save(this, bytes)
+                } finally {
+                    bytes.fill(0)
+                }
+                getSharedPreferences("nexora", MODE_PRIVATE).edit()
+                    .putBoolean("freeProfileActive", true)
+                    .putString("profileName", "WireGuard pessoal").apply()
+                refreshFreeProfile()
+                refreshControls()
+                AlertDialog.Builder(this).setTitle("Perfil WireGuard pronto")
+                    .setMessage("Perfil validado e salvo com criptografia. Toque em CONECTAR AGORA. Depois use VERIFICAR INTERNET para saber se houve acesso real.")
+                    .setPositiveButton("Entendi", null).show()
+            } catch (_: Exception) {
+                AlertDialog.Builder(this).setTitle("Arquivo inválido")
+                    .setMessage("Selecione um arquivo WireGuard .conf legítimo do seu provedor. Nenhuma chave será enviada ao Nexora.")
+                    .setPositiveButton("OK", null).show()
+            }
+        }
+    }
+
+    private fun freeProfileSelected(): Boolean =
+        getSharedPreferences("nexora", MODE_PRIVATE)
+            .getBoolean("freeProfileActive", false) && EncryptedProfileStore.exists(this)
+
+    private fun refreshFreeProfile() {
+        if (::freeProfileStatus.isInitialized) {
+            freeProfileStatus.text = if (freeProfileSelected())
+                "✓ Perfil WireGuard pessoal pronto. Use CONECTAR AGORA."
+                else "Nenhum perfil de teste importado. Crie uma configuração pessoal no provedor."
+            freeProfileStatus.setTextColor(if (freeProfileSelected()) mint else secondary)
+        }
+    }
+
+    private fun openProvider(link: String) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(link)))
+        } catch (_: Exception) {
+            AlertDialog.Builder(this).setMessage("Não foi possível abrir o navegador.")
+                .setPositiveButton("OK", null).show()
+        }
+    }
+
+    private fun importFreeProfile() {
+        if (VpnSession.state == VpnSession.State.CONNECTED ||
+            VpnSession.state == VpnSession.State.CONNECTING || provisioning) {
+            AlertDialog.Builder(this).setMessage("Desconecte a VPN antes de importar.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+        }
+        startActivityForResult(intent, REQ_IMPORT)
+    }
+
+    private fun removeFreeProfile() {
+        if (VpnSession.state == VpnSession.State.CONNECTED ||
+            VpnSession.state == VpnSession.State.CONNECTING) {
+            AlertDialog.Builder(this).setMessage("Desconecte a VPN antes de remover o perfil.")
+                .setPositiveButton("OK", null).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Remover configuração de teste?")
+            .setMessage("O perfil WireGuard pessoal será apagado deste aparelho.")
+            .setPositiveButton("Remover") { _, _ ->
+                EncryptedProfileStore.remove(this)
+                getSharedPreferences("nexora", MODE_PRIVATE).edit()
+                    .putBoolean("freeProfileActive", false).apply()
+                refreshFreeProfile()
+                refreshControls()
+            }.setNegativeButton("Cancelar", null).show()
+    }
+
+    private fun connectSelectedVpn() {
+        if (freeProfileSelected()) {
+            VpnSession.connect()
+        } else {
+            beginProvision()
+        }
+    }
+
+    private fun verifyVpnInternet() {
+        if (VpnSession.state != VpnSession.State.CONNECTED) {
+            verifyStatus.text = "Conecte o túnel WireGuard primeiro."
+            return
+        }
+        verifyButton.isEnabled = false
+        verifyStatus.text = "Verificando conexão HTTPS real e IP público..."
+        Thread {
+            val output = try {
+                val url = URL("https://api64.ipify.org")
+                val conn = (url.openConnection() as HttpsURLConnection).apply {
+                    connectTimeout = 6500
+                    readTimeout = 6500
+                    instanceFollowRedirects = false
+                    useCaches = false
+                }
+                try {
+                    val code = conn.responseCode
+                    if (code != 200) {
+                        "Servidor de teste respondeu HTTP " + code + ". Internet não confirmada."
+                    } else {
+                        val ip = conn.inputStream.bufferedReader().use { it.readText().trim() }
+                        if (ip.length in 3..45 &&
+                            ip.matches(Regex("[a-fA-F0-9.:]+")))
+                            "✓ HTTPS funcionando. IP público observado: " + ip +
+                                ". Compare com seu IP antes da VPN."
+                        else "HTTPS respondeu, mas o IP não pôde ser confirmado."
+                    }
+                } finally {
+                    conn.disconnect()
+                }
+            } catch (error: Exception) {
+                "Não foi possível acessar a internet: " + error.javaClass.simpleName +
+                    ". Túnel local ativo não significa servidor alcançável."
+            }
+            runOnUiThread {
+                if (!isFinishing && !isDestroyed) {
+                    verifyStatus.text = output
+                    verifyButton.isEnabled = true
+                }
+            }
+        }.start()
     }
 
     private fun chosenServer(): ServerDirectory.Server? =
@@ -352,8 +574,11 @@ class MainActivity : Activity() {
         serverButton.text = (chosen?.name ?: "Selecionar servidor") + "  ▾"
         serverButton.isEnabled = !loadingServers && availableServers().isNotEmpty() &&
             VpnSession.state != VpnSession.State.CONNECTED && !provisioning
-        currentProfile.text = if (chosen != null) chosen.region + " • " + chosen.name
-            else "Escolha um servidor disponível para sua operadora."
+        currentProfile.text = when {
+            freeProfileSelected() -> "Perfil WireGuard pessoal em uso (sem API Nexora)"
+            chosen != null -> chosen.region + " • " + chosen.name
+            else -> "Escolha um servidor disponível para sua operadora."
+        }
     }
 
     private fun chooseCarrier() {
@@ -476,8 +701,12 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed) return@runOnUiThread
                 provisioning = false
-                if (result.isSuccess) VpnSession.connect()
-                else renderState(VpnSession.State.ERROR,
+                if (result.isSuccess) {
+                    getSharedPreferences("nexora", MODE_PRIVATE).edit()
+                        .putBoolean("freeProfileActive", false).apply()
+                    refreshFreeProfile()
+                    VpnSession.connect()
+                } else renderState(VpnSession.State.ERROR,
                     "O servidor não conseguiu preparar a VPN. Verifique a configuração do serviço.")
                 refreshControls()
             }
@@ -485,8 +714,8 @@ class MainActivity : Activity() {
     }
 
         private fun about() {
-        AlertDialog.Builder(this).setTitle("Nexora VPN · Primeira versão")
-            .setMessage("Nexora VPN v0.2 de teste.\n\nEscolha operadora e servidor. O administrador publica servidores autorizados por HTTPS. O telefone cria sua chave privada localmente.\n\nA VPN precisa de uma rede com acesso ao servidor e não fornece dados móveis gratuitos. Não inclui servidores ativos nesta versão de teste.")
+        AlertDialog.Builder(this).setTitle("Nexora VPN · v0.3.3")
+            .setMessage("Você pode usar um perfil WireGuard pessoal de provedor autorizado, ou servidores Nexora configurados pela API. A chave privada do perfil fica criptografada no Android.\n\nUma VPN exige conexão com o servidor. Não oferece créditos ou internet móvel grátis. A opção VERIFICAR INTERNET testa uma resposta HTTPS, não garante que o túnel tenha autenticado.")
             .setPositiveButton("Entendi", null).show()
     }
 
@@ -519,6 +748,7 @@ class MainActivity : Activity() {
         switchButton.alpha = if (busy) 0.65f else 1f
         power.alpha = if (active || !busy) 1f else 0.65f
         if (!active) { down.text = "0 B"; up.text = "0 B" }
+        if (::verifyButton.isInitialized) verifyButton.isEnabled = active
         refreshControls()
     }
 
