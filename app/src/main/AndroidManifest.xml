@@ -16,6 +16,9 @@
         android:supportsRtl="true"
         android:theme="@style/NexoraTheme">
         <activity
+            android:name=".DiagnosticsActivity"
+            android:exported="false" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:screenOrientation="unspecified">
