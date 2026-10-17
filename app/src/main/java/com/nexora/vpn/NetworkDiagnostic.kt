@@ -22,7 +22,7 @@ import javax.net.ssl.SSLException
  * There is no proxying, spoofing, SNI rewriting, or third-party tunnelling.
  */
 object NetworkDiagnostic {
-    enum class Verdict { PASS, PARTIAL, FAIL }
+    enum class Verdict { PASS, PARTIAL, FAIL, SKIPPED }
     data class Finding(val verdict: Verdict, val detail: String)
     data class Target(val url: URL, val hostname: String)
 
@@ -51,9 +51,9 @@ object NetworkDiagnostic {
         if (network == null) {
             report("cellular", Finding(Verdict.FAIL,
                 "Não foi possível selecionar a rede móvel para teste. " + manager.diagnostics + " Wi-Fi não será usado."))
-            report("dns", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
-            report("https", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
-            report("internet", Finding(Verdict.FAIL, "Teste não executado: sem rede celular selecionada."))
+            report("dns", Finding(Verdict.SKIPPED, "Não executado: o Android não disponibilizou uma rede celular para o teste."))
+            report("https", Finding(Verdict.SKIPPED, "Não executado: o Android não disponibilizou uma rede celular para o teste."))
+            report("internet", Finding(Verdict.SKIPPED, "Não executado: o Android não disponibilizou uma rede celular para o teste."))
             manager.close()
             return
         }
@@ -61,9 +61,9 @@ object NetworkDiagnostic {
             val caps = cm.getNetworkCapabilities(network)
             if (caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) != true) {
                 report("cellular", Finding(Verdict.FAIL, "A rede selecionada deixou de ser móvel."))
-                report("dns", Finding(Verdict.FAIL, "Não executado."))
-                report("https", Finding(Verdict.FAIL, "Não executado."))
-                report("internet", Finding(Verdict.FAIL, "Não executado."))
+                report("dns", Finding(Verdict.SKIPPED, "Não executado: a rede celular selecionada deixou de estar disponível."))
+                report("https", Finding(Verdict.SKIPPED, "Não executado: a rede celular selecionada deixou de estar disponível."))
+                report("internet", Finding(Verdict.SKIPPED, "Não executado: a rede celular selecionada deixou de estar disponível."))
                 return
             }
             val validated = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
