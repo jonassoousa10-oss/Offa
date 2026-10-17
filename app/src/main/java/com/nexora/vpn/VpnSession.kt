@@ -26,11 +26,20 @@ object VpnSession {
         private set
     private var backend: GoBackend? = null
 
+    /** UP means Android accepted the tunnel; only the peer handshake confirms server response. */
+    data class LinkSnapshot(
+        val rx: Long,
+        val tx: Long,
+        val lastHandshakeEpochMillis: Long
+    ) {
+        val handshakeConfirmed: Boolean get() = lastHandshakeEpochMillis > 0L
+    }
+
     private val tunnel = object : Tunnel {
         override fun getName(): String = "nexora"
         override fun onStateChange(newState: Tunnel.State) {
             when (newState) {
-                Tunnel.State.UP -> emit(State.CONNECTED, "Túnel WireGuard ativo")
+                Tunnel.State.UP -> emit(State.CONNECTED, "Túnel ativado no Android; aguardando resposta do servidor")
                 Tunnel.State.DOWN -> emit(State.DISCONNECTED, "Desconectado")
                 else -> Unit
             }
@@ -60,7 +69,7 @@ object VpnSession {
                 val config: Config = EncryptedProfileStore.load(app)
                 val engine = backend ?: GoBackend(app).also { backend = it }
                 engine.setState(tunnel, Tunnel.State.UP, config)
-                emit(State.CONNECTED, "Túnel ativo — verificando tráfego")
+                emit(State.CONNECTED, "Túnel ativado; conexão com servidor ainda não confirmada")
                 val intent = Intent(app, ConnectionService::class.java)
                 try {
                     if (Build.VERSION.SDK_INT >= 26) app.startForegroundService(intent)
@@ -83,6 +92,29 @@ object VpnSession {
             catch (_: Exception) { /* Best effort: notify user below */ }
             emit(State.DISCONNECTED, "Desconectado")
             app.stopService(Intent(app, ConnectionService::class.java))
+        }
+    }
+
+    /**
+     * Pulls the actual WireGuard peer stats from the official backend.
+     * Never implies that tunnel UP or TX>0 alone proves server connectivity.
+     */
+    fun linkSnapshot(onResult: (LinkSnapshot) -> Unit) {
+        executor.execute {
+            val result = try {
+                val stats = backend?.getStatistics(tunnel)
+                val peerTimes = stats?.peers()?.mapNotNull { key ->
+                    stats.peer(key)?.latestHandshakeEpochMillis()
+                }.orEmpty()
+                LinkSnapshot(
+                    stats?.totalRx() ?: 0L,
+                    stats?.totalTx() ?: 0L,
+                    peerTimes.maxOrNull() ?: 0L
+                )
+            } catch (_: Exception) {
+                LinkSnapshot(0L, 0L, 0L)
+            }
+            main.post { onResult(result) }
         }
     }
 
