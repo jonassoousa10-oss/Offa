@@ -36,7 +36,7 @@ object NetworkDiagnostic {
             throw IllegalArgumentException("Endereço inválido.")
         }
         require(u.protocol.equals("https", true) && !u.host.isNullOrBlank() &&
-                u.userInfo == null && u.port in -1..65535 && u.port != 0) {
+                u.toURI().userInfo == null && u.port in -1..65535 && u.port != 0) {
             "Use HTTPS com domínio válido (ex.: https://www.vivo.com.br)."
         }
         require(!u.host.contains(' ') && !u.host.contains('\n')) { "Domínio inválido." }
@@ -140,7 +140,7 @@ object NetworkDiagnostic {
             prepare(conn)
             val code = conn.responseCode
             val cipher = conn.cipherSuite
-            code to ("HTTP " + code + " (TLS " + if (cipher.isNotEmpty()) "válido)" else "desconhecido)")
+            code to ("HTTP " + code + " (TLS " + (if (cipher.isNotEmpty()) "válido)" else "desconhecido)"))
         } catch (error: Exception) {
             -1 to reason(error)
         } finally { conn.disconnect() }
