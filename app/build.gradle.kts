@@ -9,8 +9,8 @@ android {
         applicationId = "com.nexora.vpn"
         minSdk = 24
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.3.3-test"
+        versionCode = 7
+        versionName = "0.3.4-test"
     }
     buildFeatures { buildConfig = true }
     defaultConfig {
