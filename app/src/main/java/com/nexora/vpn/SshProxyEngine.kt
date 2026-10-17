@@ -13,10 +13,10 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.net.InetAddress
 import java.net.InetSocketAddress
-import java.net.Proxy
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.URL
+import javax.net.ssl.SSLSocket
+import javax.net.ssl.SSLSocketFactory
 import java.security.MessageDigest
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
@@ -60,7 +60,7 @@ object SshProxyEngine {
     private val connections = AtomicInteger()
     private var session: Session? = null
     private var socks: ServerSocket? = null
-    private var running = false
+    @Volatile private var running = false
     @Volatile var localPort: Int = -1
         private set
     @Volatile var state: String = "Desconectado"
@@ -287,7 +287,11 @@ object SshProxyEngine {
         }
     }
 
-    /** End-to-end check using the SOCKS5 proxy. Does not enable Android system VPN. */
+    /**
+     * End-to-end check: explicitly sends SOCKS5 CONNECT into the local SSH gateway
+     * and negotiates HTTPS over that very socket. Does not risk a platform API
+     * silently bypassing a SOCKS proxy and giving a false-positive IP result.
+     */
     fun verify(callback: (String) -> Unit) {
         handlers.execute {
             val port = localPort
@@ -297,26 +301,56 @@ object SshProxyEngine {
                 return@execute
             }
             val result = try {
-                val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", port))
-                val conn = URL("https://api64.ipify.org").openConnection(proxy) as HttpsURLConnection
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
-                conn.useCaches = false
-                conn.instanceFollowRedirects = false
-                try {
-                    val response = conn.responseCode
-                    if (response != 200) "Teste SSH/Proxy: HTTP " + response
-                    else {
-                        val ip = conn.inputStream.bufferedReader().use { it.readText().trim() }
-                        if (!ip.matches(Regex("[a-fA-F0-9.:]{3,45}"))) {
-                            "SSH/Proxy respondeu, IP não confirmado."
-                        } else "SSH/Proxy passou no HTTPS. IP de saída observado: " + ip +
-                            ". Outros aplicativos ainda NÃO passam por esse proxy."
+                Socket().use { raw ->
+                    raw.connect(InetSocketAddress("127.0.0.1", port), 5000)
+                    raw.soTimeout = 8500
+                    val input = DataInputStream(raw.getInputStream())
+                    val output = raw.getOutputStream()
+                    output.write(byteArrayOf(5, 1, 0))
+                    output.flush()
+                    require(input.readUnsignedByte() == 5 &&
+                        input.readUnsignedByte() == 0) { "SOCKS5 recusou autenticação." }
+                    val hostname = "api64.ipify.org".toByteArray(Charsets.US_ASCII)
+                    output.write(byteArrayOf(5, 1, 0, 3, hostname.size.toByte()))
+                    output.write(hostname)
+                    output.write(byteArrayOf(1, -69)) // TCP 443 (0x01BB)
+                    output.flush()
+                    require(input.readUnsignedByte() == 5 &&
+                        input.readUnsignedByte() == 0) { "Servidor SSH recusou encaminhamento TCP." }
+                    val remainder = ByteArray(8)
+                    input.readFully(remainder)
+                    val tls = (SSLSocketFactory.getDefault() as SSLSocketFactory)
+                        .createSocket(raw, "api64.ipify.org", 443, false) as SSLSocket
+                    tls.use { secure ->
+                        secure.soTimeout = 8500
+                        val params = secure.sslParameters
+                        params.endpointIdentificationAlgorithm = "HTTPS"
+                        secure.sslParameters = params
+                        secure.startHandshake()
+                        val request = (
+                            "GET / HTTP/1.1\r\nHost: api64.ipify.org\r\n" +
+                            "Accept: text/plain\r\nConnection: close\r\n\r\n"
+                        ).toByteArray(Charsets.US_ASCII)
+                        secure.outputStream.write(request)
+                        secure.outputStream.flush()
+                        val reader = secure.inputStream.bufferedReader(Charsets.US_ASCII)
+                        val response = reader.readLine()?.take(100).orEmpty()
+                        require(response.contains(" 200 ")) {
+                            "Resposta HTTPS inesperada: " + response.take(60)
+                        }
+                        for (i in 0..48) {
+                            if (reader.readLine().isNullOrEmpty()) break
+                        }
+                        val ip = reader.readLine()?.trim()?.take(80).orEmpty()
+                        if (ip.matches(Regex("[a-fA-F0-9.:]{3,45}")))
+                            "SSH SOCKS5 e HTTPS confirmados; IP de saída: " + ip +
+                                ". Outros aplicativos Android não passam por este proxy nesta versão."
+                        else "SSH SOCKS5 e HTTPS responderam, mas o IP não pôde ser validado."
                     }
-                } finally { conn.disconnect() }
+                }
             } catch (error: Exception) {
                 "Teste SSH/Proxy falhou (" + error.javaClass.simpleName +
-                    "). Login SSH não garante que o servidor permita encaminhamento."
+                    "). Verifique se a conta permite direct-tcpip e se o servidor é alcançável."
             }
             post(result, callback)
         }
