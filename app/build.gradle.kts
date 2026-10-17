@@ -30,7 +30,7 @@ android {
     packaging {
         jniLibs { useLegacyPackaging = true }
         resources {
-            excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF"
+            excludes += "META-INF/versions/**/OSGI-INF/MANIFEST.MF"
         }
     }
 }
