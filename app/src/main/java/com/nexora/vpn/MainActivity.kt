@@ -28,6 +28,9 @@ import android.widget.ScrollView
 import android.widget.TextView
 import java.io.ByteArrayOutputStream
 import java.net.URL
+import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Socket
 import javax.net.ssl.HttpsURLConnection
 import java.util.Locale
 
@@ -54,6 +57,7 @@ class MainActivity : Activity() {
     private lateinit var freeProfileStatus: TextView
     private lateinit var verifyButton: Button
     private lateinit var verifyStatus: TextView
+    private lateinit var linkStatus: TextView
     private var allServers: List<ServerDirectory.Server> = emptyList()
     private var selectedServerId: String? = null
     private var loadingServers = false
@@ -70,10 +74,23 @@ class MainActivity : Activity() {
             if (!isFinishing && ::down.isInitialized) {
                 currentNetwork.text = networkName()
                 if (VpnSession.state == VpnSession.State.CONNECTED) {
-                    VpnSession.traffic { rx, tx ->
-                        if (!isFinishing) {
-                            down.text = readableBytes(rx)
-                            up.text = readableBytes(tx)
+                    VpnSession.linkSnapshot { snapshot ->
+                        if (!isFinishing && !isDestroyed &&
+                            VpnSession.state == VpnSession.State.CONNECTED) {
+                            down.text = readableBytes(snapshot.rx)
+                            up.text = readableBytes(snapshot.tx)
+                            val confirmed = snapshot.handshakeConfirmed
+                            linkStatus.text = if (confirmed)
+                                "✓ Servidor WireGuard respondeu (handshake confirmado). Ainda é preciso testar acesso HTTPS."
+                            else if (snapshot.tx > 0L && snapshot.rx == 0L)
+                                "⚠ Dados enviados, mas nenhuma resposta do servidor. Confira chip, rede, validade do perfil e alcance do servidor."
+                            else
+                                "Aguardando handshake WireGuard. Túnel ligado no Android não significa conexão com servidor."
+                            linkStatus.setTextColor(if (confirmed) mint else secondary)
+                            status.text = if (confirmed) "Servidor respondeu" else "Aguardando servidor"
+                            statePill.text = if (confirmed)
+                                "● HANDSHAKE CONFIRMADO" else "● TÚNEL SEM RESPOSTA"
+                            statePill.setTextColor(if (confirmed) mint else secondary)
                         }
                     }
                 }
@@ -276,6 +293,9 @@ class MainActivity : Activity() {
         spacer(freeCard, 8)
         verifyStatus = text("Túnel ativo não garante acesso. Faça a verificação após conectar.", 12f, secondary)
         freeCard.addView(verifyStatus)
+        spacer(freeCard, 10)
+        linkStatus = text("Túnel desligado. Sem verificação de handshake.", 12f, secondary)
+        freeCard.addView(linkStatus)
         spacer(body, 17)
 
         val networkCard = card(body)
@@ -368,7 +388,7 @@ class MainActivity : Activity() {
         statsRow.addView(upBox, LinearLayout.LayoutParams(0, -2, 1f))
         statsCard.addView(statsRow)
         spacer(body, 24)
-        val footer = text("NEXORA VPN  ·  v0.3.3 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
+        val footer = text("NEXORA VPN  ·  v0.3.4 TEST  ·  PRIVACIDADE EM PRIMEIRO LUGAR", 9f, secondary, true, 0.4f)
         footer.gravity = Gravity.CENTER
         body.addView(footer)
     }
@@ -519,42 +539,62 @@ class MainActivity : Activity() {
 
     private fun verifyVpnInternet() {
         if (VpnSession.state != VpnSession.State.CONNECTED) {
-            verifyStatus.text = "Conecte o túnel WireGuard primeiro."
+            verifyStatus.text = "Primeiro ative o túnel VPN no botão CONECTAR AGORA."
             return
         }
         verifyButton.isEnabled = false
-        verifyStatus.text = "Verificando conexão HTTPS real e IP público..."
+        verifyStatus.text = "Testando IP direto, DNS, HTTPS e handshake do servidor..."
         Thread {
-            val output = try {
-                val url = URL("https://api64.ipify.org")
-                val conn = (url.openConnection() as HttpsURLConnection).apply {
-                    connectTimeout = 6500
-                    readTimeout = 6500
+            // Numeric IP test avoids mistaking DNS errors for an unreachable VPN.
+            val tcpResult = try {
+                Socket().use { socket ->
+                    socket.connect(InetSocketAddress("1.1.1.1", 443), 5500)
+                }
+                "TCP por IP: acessível (1.1.1.1:443)."
+            } catch (error: Exception) {
+                "TCP por IP: falhou (" + error.javaClass.simpleName + ")."
+            }
+            val dnsResult = try {
+                val addresses = InetAddress.getAllByName("api64.ipify.org")
+                if (addresses.isEmpty()) "DNS: nenhuma resposta."
+                else "DNS: resolveu " + addresses.size + " endereço(s)."
+            } catch (error: Exception) {
+                "DNS: falhou (" + error.javaClass.simpleName + ")."
+            }
+            val httpsResult = try {
+                val conn = (URL("https://api64.ipify.org").openConnection() as HttpsURLConnection).apply {
+                    connectTimeout = 6000
+                    readTimeout = 6000
                     instanceFollowRedirects = false
                     useCaches = false
                 }
                 try {
                     val code = conn.responseCode
-                    if (code != 200) {
-                        "Servidor de teste respondeu HTTP " + code + ". Internet não confirmada."
-                    } else {
+                    if (code != 200) "HTTPS: HTTP " + code + ", acesso não confirmado."
+                    else {
                         val ip = conn.inputStream.bufferedReader().use { it.readText().trim() }
-                        if (ip.length in 3..45 &&
-                            ip.matches(Regex("[a-fA-F0-9.:]+")))
-                            "✓ HTTPS funcionando. IP público observado: " + ip +
-                                ". Compare com seu IP antes da VPN."
-                        else "HTTPS respondeu, mas o IP não pôde ser confirmado."
+                        if (ip.length in 3..45 && ip.matches(Regex("[a-fA-F0-9.:]+")))
+                            "HTTPS: FUNCIONOU. IP público observado: " + ip + "."
+                        else "HTTPS respondeu, mas não retornou IP válido."
                     }
-                } finally {
-                    conn.disconnect()
-                }
+                } finally { conn.disconnect() }
             } catch (error: Exception) {
-                "Não foi possível acessar a internet: " + error.javaClass.simpleName +
-                    ". Túnel local ativo não significa servidor alcançável."
+                "HTTPS: falhou (" + error.javaClass.simpleName + ")."
             }
-            runOnUiThread {
+            VpnSession.linkSnapshot { snapshot ->
                 if (!isFinishing && !isDestroyed) {
-                    verifyStatus.text = output
+                    val handshake = if (snapshot.handshakeConfirmed)
+                        "Handshake WireGuard: CONFIRMADO (servidor respondeu)."
+                    else "Handshake WireGuard: NÃO CONFIRMADO (sem resposta autenticada)."
+                    verifyStatus.text = handshake + "\n" +
+                        "Enviados " + readableBytes(snapshot.tx) +
+                        " | Recebidos " + readableBytes(snapshot.rx) + "\n" +
+                        tcpResult + "\n" + dnsResult + "\n" + httpsResult + "\n" +
+                        if (!snapshot.handshakeConfirmed && snapshot.rx == 0L)
+                            "Se o chip está sem franquia, a operadora pode bloquear o servidor VPN. Teste o mesmo perfil com dados móveis ativos antes de concluir."
+                        else if (httpsResult.startsWith("HTTPS: FUNCIONOU"))
+                            "Internet confirmada pelo teste HTTPS. O ícone VPN isoladamente não comprova a conexão."
+                        else "Conexão parcial: confira DNS, rota e regras do provedor. Sem alterar configurações privadas."
                     verifyButton.isEnabled = true
                 }
             }
@@ -714,7 +754,7 @@ class MainActivity : Activity() {
     }
 
         private fun about() {
-        AlertDialog.Builder(this).setTitle("Nexora VPN · v0.3.3")
+        AlertDialog.Builder(this).setTitle("Nexora VPN · v0.3.4")
             .setMessage("Você pode usar um perfil WireGuard pessoal de provedor autorizado, ou servidores Nexora configurados pela API. A chave privada do perfil fica criptografada no Android.\n\nUma VPN exige conexão com o servidor. Não oferece créditos ou internet móvel grátis. A opção VERIFICAR INTERNET testa uma resposta HTTPS, não garante que o túnel tenha autenticado.")
             .setPositiveButton("Entendi", null).show()
     }
@@ -723,7 +763,7 @@ class MainActivity : Activity() {
         val active = state == VpnSession.State.CONNECTED
         val busy = state == VpnSession.State.CONNECTING || state == VpnSession.State.DISCONNECTING
         status.text = when (state) {
-            VpnSession.State.CONNECTED -> "Túnel ativo"
+            VpnSession.State.CONNECTED -> "Túnel ligado"
             VpnSession.State.CONNECTING -> "Conectando…"
             VpnSession.State.DISCONNECTING -> "Desconectando…"
             VpnSession.State.ERROR -> "Falha de conexão"
@@ -731,13 +771,13 @@ class MainActivity : Activity() {
         }
         caption.text = message
         statePill.text = when (state) {
-            VpnSession.State.CONNECTED -> "● PROTEÇÃO ATIVA"
+            VpnSession.State.CONNECTED -> "● TÚNEL LIGADO (NÃO VERIFICADO)"
             VpnSession.State.CONNECTING -> "● CONECTANDO"
             VpnSession.State.DISCONNECTING -> "● DESCONECTANDO"
             VpnSession.State.ERROR -> "● ERRO DE CONEXÃO"
             else -> "● DESCONECTADO"
         }
-        statePill.setTextColor(if (active) mint else secondary)
+        statePill.setTextColor(secondary)
         switchButton.text = when (state) {
             VpnSession.State.CONNECTED -> "DESCONECTAR"
             VpnSession.State.CONNECTING -> "ESTABELECENDO TÚNEL…"
@@ -747,7 +787,14 @@ class MainActivity : Activity() {
         switchButton.isEnabled = !busy && !provisioning
         switchButton.alpha = if (busy) 0.65f else 1f
         power.alpha = if (active || !busy) 1f else 0.65f
-        if (!active) { down.text = "0 B"; up.text = "0 B" }
+        if (!active) {
+            down.text = "0 B"
+            up.text = "0 B"
+            if (::linkStatus.isInitialized) {
+                linkStatus.text = "Túnel desligado. Nenhum handshake ativo."
+                linkStatus.setTextColor(secondary)
+            }
+        }
         if (::verifyButton.isInitialized) verifyButton.isEnabled = active
         refreshControls()
     }
