@@ -1,0 +1,18 @@
+; Engine configuration file.
+config_version=5
+[application]
+config/name="Legiões 3D - Invasão"
+run/main_scene="res://scenes/main.tscn"
+config/description="Jogo nativo 3D de estratégia e multidões"
+[display]
+window/size/viewport_width=540
+window/size/viewport_height=960
+window/size/window_width_override=540
+window/size/window_height_override=960
+window/stretch/mode="canvas_items"
+window/handheld/orientation=1
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+anti_aliasing/quality/msaa_3d=2
+environment/defaults/default_clear_color=Color(0.585, 0.805, 0.961, 1)
