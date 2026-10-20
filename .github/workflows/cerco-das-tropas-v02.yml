@@ -55,6 +55,29 @@ jobs:
             timeout 25 "$CHROME" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-sandbox --hide-scrollbars --allow-file-access-from-files --disable-dev-shm-usage --virtual-time-budget=5000 --window-size=480,960 --screenshot=/tmp/cerco-preview.png "file://$GITHUB_WORKSPACE/cerco-das-tropas/app/src/main/assets/index.html" || true
             if [ -s /tmp/cerco-preview.png ]; then cp /tmp/cerco-preview.png cerco-das-tropas/preview.png; fi
           fi
+      - name: Capturar tela de combate com soldados (nao bloqueante)
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p=Path('cerco-das-tropas/app/src/main/assets/index.html')
+          s=p.read_text()
+          before='requestAnimationFrame(frame);\\n})();'
+          after="requestAnimationFrame(frame);setTimeout(()=>{document.getElementById('play').click();touching=true;aim=2.0;},120);\\n})();"
+          if before in s:
+              Path('cerco-das-tropas/app/src/main/assets/gameplay-preview.html').write_text(s.replace(before,after))
+          PY
+          CHROME=$(command -v google-chrome || command -v chromium || true)
+          if [ -n "$CHROME" ] && [ -s cerco-das-tropas/app/src/main/assets/gameplay-preview.html ]; then
+            timeout 35 "$CHROME" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-sandbox --hide-scrollbars --allow-file-access-from-files --disable-dev-shm-usage --virtual-time-budget=6000 --window-size=480,960 --screenshot=cerco-das-tropas/gameplay-preview.png "file://$GITHUB_WORKSPACE/cerco-das-tropas/app/src/main/assets/gameplay-preview.html" || true
+          fi
+      - name: Publicar captura de jogo
+        uses: actions/upload-artifact@v4
+        with:
+          name: CercoDasTropas3D-v02-gameplay
+          path: cerco-das-tropas/gameplay-preview.png
+          if-no-files-found: ignore
+          retention-days: 1
       - name: Publicar APK (apaga em 1 dia)
         uses: actions/upload-artifact@v4
         with:
