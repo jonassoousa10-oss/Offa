@@ -1,0 +1,91 @@
+name: Legioes 3D - APK Godot nativo
+on:
+  push:
+    branches: [legioes-3d-android-nativo-v1]
+    paths:
+      - 'legioes3d/**'
+      - '.github/workflows/legioes3d-android.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Baixar 3D animado KayKit CC0 (nao salvar no repositorio)
+        run: |
+          set -euxo pipefail
+          mkdir -p legioes3d/assets
+          BASE=https://raw.githubusercontent.com/KayKit-Game-Assets/KayKit-Character-Pack-Adventures-1.0/main/addons/kaykit_character_pack_adventures/Characters/gltf
+          for name in Knight Rogue; do
+            curl --fail --retry 3 --max-time 120 -L "$BASE/$name.glb" -o "legioes3d/assets/$name.glb"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          for p in Path("legioes3d/assets").glob("*.glb"):
+              print("Modelo 3D original CC0:",p.name,p.stat().st_size)
+              assert p.stat().st_size > 100_000 and p.open("rb").read(4)==b"glTF",p
+          PY
+      - name: Preparar SDK Android preinstalado
+        run: |
+          set -eux
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" "platform-tools" >/dev/null
+          keytool -genkeypair -v -keystore /tmp/godot-debug.keystore -alias androiddebugkey -keyalg RSA -keysize 2048 -validity 10000 -storepass android -keypass android -dname "CN=Android Debug, O=Demo, C=BR"
+      - name: Instalar Godot 4.4.1 e template Android oficial
+        run: |
+          set -euxo pipefail
+          curl -L --fail --retry 3 --max-time 240 -o /tmp/godot.zip https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip -o -q /tmp/godot.zip -d /tmp/godotbin
+          chmod +x /tmp/godotbin/Godot_v4.4.1-stable_linux.x86_64
+          sudo ln -sf /tmp/godotbin/Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+          godot --version
+          curl -L --fail --retry 3 --max-time 300 -o /tmp/godot-templates.tpz https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+          DEST=$HOME/.local/share/godot/export_templates/4.4.1.stable
+          mkdir -p "$DEST"
+          unzip -j -o -q /tmp/godot-templates.tpz 'templates/android_debug.apk' -d "$DEST"
+          echo '4.4.1.stable' > "$DEST/version.txt"
+          ls -lh "$DEST"
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_HOME"
+          export/android/java_sdk_path = "$JAVA_HOME"
+          export/android/debug_keystore = "/tmp/godot-debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+      - name: Importar modelos 3D e validar GDScript
+        working-directory: legioes3d
+        run: |
+          mkdir -p build
+          timeout 220 godot --headless --editor --path . --import 2>&1 | tee build/import.log
+          if grep -E '^SCRIPT ERROR|Parse Error:|ERROR: .*Parse' build/import.log; then exit 1; fi
+      - name: Exportar APK Android ARM64
+        env:
+          GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /tmp/godot-debug.keystore
+          GODOT_ANDROID_KEYSTORE_DEBUG_USER: androiddebugkey
+          GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD: android
+        working-directory: legioes3d
+        run: |
+          set -eo pipefail
+          godot --headless --path . --export-debug Android build/Legioes3D-Invasao-v0.1.apk 2>&1 | tee build/export.log
+          test -s build/Legioes3D-Invasao-v0.1.apk
+          unzip -t build/Legioes3D-Invasao-v0.1.apk | tail -1
+          ls -lh build/Legioes3D-Invasao-v0.1.apk
+      - name: APK temporario (1 dia)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Legioes3D-Invasao-v0.1-APK
+          path: legioes3d/build/Legioes3D-Invasao-v0.1.apk
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
