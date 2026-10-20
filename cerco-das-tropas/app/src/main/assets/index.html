@@ -1,0 +1,134 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"><meta name="theme-color" content="#152b45"><title>Cerco das Tropas 3D</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}html,body{width:100%;height:100%;margin:0;overflow:hidden;touch-action:none;font-family:system-ui,-apple-system,'Arial Rounded MT Bold',sans-serif;color:#fff;background:linear-gradient(#88d1fd,#d9e9f1)}
+canvas{display:block;width:100%;height:100%;touch-action:none}#game{position:absolute;inset:0}#hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;user-select:none}
+#header{padding:calc(env(safe-area-inset-top) + 14px) 12px 0;background:linear-gradient(#14253d99,transparent);display:flex;align-items:flex-start;gap:8px}
+.circle{height:42px;display:flex;align-items:center;gap:8px;background:linear-gradient(140deg,#163d66,#0b213d);border:2px solid #9bdbef;border-radius:24px;box-shadow:0 4px 0 #07182e80,0 6px 15px #0004;padding:0 13px;font-weight:900;font-size:15px;white-space:nowrap;text-shadow:0 1px 3px #0007}
+#level{margin-left:auto;display:flex;flex-direction:column;align-items:end;text-shadow:0 2px 4px #10273a;gap:3px;font-weight:1000;font-size:13px}#level strong{font-size:20px;line-height:1}#stagebar{position:absolute;top:calc(env(safe-area-inset-top) + 67px);left:20%;width:60%;height:11px;border:2px solid #fff;border-radius:18px;background:#17263a99;overflow:hidden;box-shadow:0 2px 7px #10243a7a}#stagefill{height:100%;width:0%;border-radius:12px;background:linear-gradient(90deg,#18bcff,#62edcc,#f4f59c);transition:width .2s}
+#bottom{width:100%;padding:0 12px calc(env(safe-area-inset-bottom) + 17px);background:linear-gradient(transparent,#102336ad);display:flex;justify-content:space-between;align-items:end;gap:8px;min-height:100px}
+#hint{flex:1;font-size:12px;color:#f0feff;font-weight:850;text-shadow:0 2px 4px #0a1f36;line-height:1.5;padding:10px 0 2px}#army{font-size:18px;color:#4defff;letter-spacing:.4px;font-weight:1000}#enemy{font-size:14px;color:#ffb2ba;font-weight:900}
+#heroBtn{pointer-events:auto;display:none;min-width:80px;height:73px;border:3px solid #fff8a9;border-radius:20px;color:#fff;background:linear-gradient(#ffa937,#ce4b0b);box-shadow:0 6px #713618,0 8px 13px #0008;font-size:30px;flex-direction:column;align-items:center;justify-content:center;line-height:1;gap:4px}#heroBtn small{font-size:10px;font-weight:1000}#heroBtn:disabled{filter:grayscale(.9);opacity:.6}
+#modal{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:linear-gradient(145deg,#0b23475a,#130d445e);padding:22px;z-index:3}#dialog{border-radius:25px;padding:23px 18px 24px;width:min(100%,360px);text-align:center;background:linear-gradient(160deg,#172d56f7,#0e1d3bf9);border:3px solid #8edcf1;box-shadow:0 14px 60px #020c27ad, inset 0 2px #ffffff28}
+.logo{font-size:12px;letter-spacing:3px;font-weight:1000;color:#57edff}#title{margin:11px 0 8px;font-size:clamp(25px,7vw,37px);line-height:1.04;font-weight:1000;text-shadow:0 3px #0a1b37}#subtitle{font-size:13px;color:#c1dfec;line-height:1.55;margin:12px 0 18px}#badge{font-size:13px;font-weight:900;display:inline-block;background:#183a62;color:#95f0ff;border-radius:12px;padding:7px 13px;border:1px solid #3ea8cf}
+#play{font-size:19px;font-weight:1000;letter-spacing:1px;min-height:60px;width:100%;border-radius:17px;border:3px solid #dbffff;background:linear-gradient(#29d6ff,#067cc7);color:#fff;box-shadow:0 6px #07537a,0 10px 18px #0006;margin:13px 0 0;cursor:pointer;text-shadow:0 1px #0a4273}#play:active{transform:translateY(4px);box-shadow:0 2px #07537a}
+#toast{position:absolute;z-index:2;top:25%;width:100%;text-align:center;font-size:24px;font-weight:1000;text-shadow:0 2px 7px #182b4b;pointer-events:none;opacity:0;transition:opacity .25s}#toast.show{opacity:1}#badgearea{display:flex;justify-content:center;margin-top:8px;gap:8px;font-size:28px}
+#fps{position:absolute;bottom:6px;left:6px;font-size:8px;color:#fffc;display:none}
+</style></head><body><div id="game"></div><div id="hud">
+<div id="header"><div class="circle"><span style="color:#ffe46b;font-size:23px">◉</span><span id="coins">0</span></div><div class="circle"><span style="color:#39e0ff;font-size:24px">◆</span><span id="gems">20</span></div><div id="level"><strong>FASE <span id="stagenum">1</span>/5</strong><span id="stagename">VALE DA AURORA</span></div></div>
+<div id="stagebar"><div id="stagefill"></div></div>
+<div id="bottom"><div id="hint"><div id="army">🔵 <span id="blue">0</span> TROPAS</div><div id="enemy">🔴 <span id="red">0</span> INIMIGOS</div>ARRASTE PARA MIRAR • SEGURE PARA DISPARAR</div><button id="heroBtn">⚡<small>CAMPEÃO</small></button></div>
+</div><div id="toast"></div><div id="modal"><div id="dialog"><div class="logo">JOGO ORIGINAL 3D</div><h1 id="title">CERCO DAS<br>TROPAS</h1><div id="badge">CAMPANHA • 5 FASES</div><div id="badgearea">🛡️ ⚔️ 🏰</div><p id="subtitle">Mire o canhão, multiplique seus soldados pelos portais e conquiste o castelo inimigo!</p><button id="play">JOGAR AGORA ▶</button></div></div><div id="fps"></div>
+<script src="three.min.js"></script>
+<script>
+(function(){'use strict';
+if(!window.THREE){document.getElementById('subtitle').textContent='Falha ao carregar o motor 3D do jogo. Reinstale o aplicativo.';return;}
+const $=s=>document.getElementById(s), T=THREE;
+const palettes=[
+ {name:'VALE DA AURORA',sky:0x9fdafb,grass:0x88dc98,road:0xa3a0ce,cliff:0xe5c19e,details:0xffd595,tree:0x45b67e},
+ {name:'TEMPLO DAS AREIAS',sky:0xfac6a6,grass:0xeec48a,road:0xbda0a2,cliff:0xce915f,details:0xfce39c,tree:0x659d70},
+ {name:'FORTALEZA GLACIAL',sky:0x9dd5f4,grass:0xd3f4f9,road:0x8da8c7,cliff:0x91bace,details:0xffffff,tree:0x64b4bc},
+ {name:'VALE VULCÂNICO',sky:0xf29b79,grass:0x95717a,road:0x625c81,cliff:0x654c63,details:0xffa169,tree:0x9d5670},
+ {name:'CIDADE NEON',sky:0x7372c7,grass:0x6c729b,road:0x6e7bc2,cliff:0x443b71,details:0x1afde0,tree:0x7d9ce1}
+];
+let stage=0,mode='menu',coins=0,gems=20,spawnClock=0,enemyClock=0,fireCount=0,aim=0,shots=0,heroEnergy=0,hp=30,maxHp=30,runTime=0,last=performance.now(),touching=false,levelGroup,stageGate=[],baseCastle,gateObjects=[],particle=[],blue=[],red=[],mobMesh=[],frames=0,lastUpdateHUD=0,toastTime=0;
+try{stage=Math.max(0,Math.min(4,parseInt(localStorage.getItem('cerco_stage')||'0')))||0;coins=parseInt(localStorage.getItem('cerco_coins')||'0')||0;}catch(e){}
+const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;$('game').appendChild(renderer.domElement);
+const scene=new T.Scene();scene.fog=new T.Fog(0xb8e3f4,46,125);const camera=new T.PerspectiveCamera(45,innerWidth/innerHeight,.1,180);camera.position.set(0,29,28);camera.lookAt(0,0,-10);
+scene.add(new T.HemisphereLight(0xffffff,0x658090,1.25));const sun=new T.DirectionalLight(0xfff4d9,2.4);sun.position.set(-18,30,17);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-28;sun.shadow.camera.right=28;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-52;sun.shadow.camera.near=.5;sun.shadow.camera.far=125;sun.shadow.bias=-.0005;scene.add(sun);
+const mats={blue:new T.MeshStandardMaterial({color:0x00a8ff,roughness:.35,metalness:.08}),lightblue:new T.MeshStandardMaterial({color:0x64d9ff,roughness:.4}),blueDark:new T.MeshStandardMaterial({color:0x1261b7,roughness:.48}),red:new T.MeshStandardMaterial({color:0xfc5272,roughness:.4}),redDark:new T.MeshStandardMaterial({color:0xb82948,roughness:.55}),gold:new T.MeshStandardMaterial({color:0xffbf36,metalness:.25,roughness:.3}),skin:new T.MeshStandardMaterial({color:0xffd9a7,roughness:.58}),white:new T.MeshStandardMaterial({color:0xffffff,roughness:.5}),black:new T.MeshStandardMaterial({color:0x15243d,roughness:.45}),grass:new T.MeshStandardMaterial({color:0x80d896,roughness:1}),stone:new T.MeshStandardMaterial({color:0xc0a1ac,roughness:.8}),water:new T.MeshStandardMaterial({color:0x57c2e2,roughness:.25,transparent:true,opacity:.88})};
+const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(1,10,8),hiSphere=new T.SphereGeometry(1,16,12),cylinder=new T.CylinderGeometry(.5,.5,1,12),cone=new T.ConeGeometry(1,1,7),disc=new T.CylinderGeometry(1,1,.015,12);
+let tmp=new T.Object3D(),q=new T.Quaternion(),ax=new T.Vector3(0,0,1);const random=(a,b)=>a+Math.random()*(b-a);
+function mat(hex){return new T.MeshStandardMaterial({color:hex,roughness:.76,flatShading:true});}
+function addMesh(parent,geo,material,x,y,z,sx=1,sy=1,sz=1,rz=0){const m=new T.Mesh(geo,material);m.position.set(x,y,z);m.scale.set(sx,sy,sz);m.rotation.y=rz;m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;}
+function box(parent,material,x,y,z,w,h,d,rz=0){return addMesh(parent,cube,material,x,y,z,w,h,d,rz);}
+function ball(parent,material,x,y,z,sx,sy=sx,sz=sx){return addMesh(parent,sphere,material,x,y,z,sx,sy,sz);}
+function cylinderMesh(parent,material,x,y,z,sx,sy,sz){return addMesh(parent,cylinder,material,x,y,z,sx,sy,sz);}
+function textSprite(text,color='#ffffff',bg='#142d58',width=240,height=110,scale=3.9){const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const c=canvas.getContext('2d');c.shadowColor='#0007';c.shadowBlur=8;c.fillStyle=bg;c.beginPath();c.roundRect(6,6,width-12,height-12,20);c.fill();c.shadowBlur=0;c.lineWidth=7;c.strokeStyle='#d7faff';c.stroke();c.fillStyle=color;c.textAlign='center';c.textBaseline='middle';c.font='bold 65px Arial';c.fillText(text,width/2,height/2+4);const tx=new T.CanvasTexture(canvas);const spr=new T.Sprite(new T.SpriteMaterial({map:tx,transparent:true,depthTest:false}));spr.scale.set(scale,scale*height/width,1);return spr;}
+function makeTree(parent,x,z,p,kind){if(kind==='ice'){const trunk=mat(0xe3eff9);cylinderMesh(parent,trunk,x,.8,z,.27,1.5,.27);for(let j=0;j<3;j++)addMesh(parent,cone,mat(j%2?0x7ec4d1:0x94d9e2),x,2.15+j*.42,z,1.15-j*.2,1.5-j*.13,1.15-j*.2);return;}
+const trunk=mat(0x8f694f);cylinderMesh(parent,trunk,x,.72,z,.31,1.5,.31);
+for(let j=0;j<3;j++){const off=[-.45,.45,0][j];ball(parent,mat([p.tree,0x7bc786,0x3bb996][j]),x+off,1.85+Math.sin(j*2)*.25,z+.1,.98,.85,.98);}
+}
+function clearLevel(){if(levelGroup){scene.remove(levelGroup);levelGroup.traverse(o=>{if(o.isMesh&&o.geometry!==cube&&o.geometry!==sphere&&o.geometry!==cylinder&&o.geometry!==cone&&o.geometry!==disc&&o.geometry!==hiSphere)o.geometry.dispose();});}levelGroup=new T.Group();scene.add(levelGroup);gateObjects=[];stageGate=[];particle.forEach(x=>scene.remove(x.mesh));particle=[];blue=[];red=[];}
+function createCastle(){const c=new T.Group();const base=mat(0xc4a7ba),roof=mat(0xe9b7c5),brick=mat(0x997b9a),door=mat(0x663e66),dark=mat(0x352a56);box(c,base,0,.58,0,8,1.15,5);box(c,brick,0,2.1,-.6,6.1,3.1,3.1);box(c,roof,0,3.65,-.6,6.8,.35,3.7);
+for(let x of [-3.2,3.2]){box(c,base,x,2.9,-.45,1.55,4.8,2.9);box(c,roof,x,5.43,-.45,2.0,.54,3.3);for(let dz of [-1.55,0,1.55])box(c,brick,x,5.95,dz,.75,.65,.68);}for(let x=-2.5;x<=2.5;x+=1.25)box(c,roof,x,4.08,1.3,.75,.75,.6);
+box(c,door,0,1.35,1.37,2.2,2.7,.25);ball(c,dark,0,2.07,1.55,.7,.78,.08);
+for(let x of [-2.15,2.15]){box(c,mats.black,x,2.15,1.52,.43,.75,.1);}
+for(let x of [-3.2,3.2]){cylinderMesh(c,mats.black,x,6.22,-.4,.05,1.0,.05);box(c,mats.red,x+.34,6.45,-.4,.65,.48,.05);}
+c.position.z=-40;levelGroup.add(c);return c;}
+function createGate(x,z,mult){const g=new T.Group(),cyan=mat(mult>=3?0x12ebd8:0x20bafa),glow=mat(0xffffc7);box(g,cyan,-1.25,1.5,0,.22,3,.31);box(g,cyan,1.25,1.5,0,.22,3,.31);box(g,glow,0,3.05,0,2.74,.27,.4);const panel=addMesh(g,new T.PlaneGeometry(2.30,2.50),new T.MeshBasicMaterial({color:mult>=3?0x43f5e2:0x3ca9fb,opacity:.26,transparent:true,side:T.DoubleSide,depthWrite:false}),0,1.56,0);panel.rotation.y=0;
+const s=textSprite('x'+mult,'#ffffff',mult>=3?'#1676a9':'#2755b4',256,119,2.24);s.position.set(0,3.75,0);g.add(s);
+g.position.set(x,0,z);levelGroup.add(g);return {x,z,mult,g,sprite:s,baseX:x};}
+function makeRock(x,z,p,seed){const geo=new T.DodecahedronGeometry(1,0),m=mat(seed%2?p.cliff:p.details);addMesh(levelGroup,geo,m,x,random(.2,.7),z,random(.75,2.4),random(.5,2.0),random(.75,1.7),seed*.73);}
+function makeBuilding(x,z,p,seed){const c=seed%3===0?0xc9b2ac:seed%3===1?0x8dbfcd:0xe8d2bd, m=mat(c);box(levelGroup,m,x,1.1,z,random(1.9,3.5),random(2.6,4.2),random(2,3.2));box(levelGroup,mat(0x6f8ba3),x,3.25,z,3.3,.40,3.5);for(let i=0;i<2;i++)box(levelGroup,mat(0x5b8fae),x+((i?1:-1)*.8),1.6,z+1.55,.55,.65,.05);}
+function makeLevel(){clearLevel();const p=palettes[stage];scene.background=new T.Color(p.sky);scene.fog.color.setHex(p.sky);const land=mat(p.grass),road=mat(p.road),edgeborder=mat(p.cliff),accent=mat(p.details);box(levelGroup,land,0,-.94,-13,82,1,95);
+// winding canyon and stone retaining walls
+box(levelGroup,edgeborder,0,-.23,-13,12.0,1.5,72);box(levelGroup,road,0,.36,-13,9.55,.45,71.5);
+box(levelGroup,mat(0x7b7199),-4.79,.68,-13,.23,.30,71);box(levelGroup,mat(0x7b7199),4.79,.68,-13,.23,.30,71);
+for(let z=-45;z<=19;z+=4.1){box(levelGroup,mat(0xdcd0e4),0,.61,z,.13,.035,2.05);for(let side of [-1,1]){box(levelGroup,edgeborder,side*5.4,.25,z,.9,.8,3.2);}}
+for(let i=0;i<34;i++){const z=-45+i*2.25;let sx=i%2?-1:1;makeRock(sx*random(8,12),z,p,i);if(i%2===0)makeTree(levelGroup,-random(11,18),z,p,stage===2?'ice':'normal');if(i%3===0)makeTree(levelGroup,random(10,19),z-1.3,p,stage===2?'ice':'normal');if(i%5===0){makeBuilding(-random(16,22),z+1,p,i);makeBuilding(random(16,22),z-2,p,i+1)}}
+for(let z=-42;z<18;z+=7.5){for(let x of [-6.8,6.8]){let post=cylinderMesh(levelGroup,edgeborder,x,.7,z,.16,1.55,.16);ball(levelGroup,mats.gold,x,1.5,z,.29);}}
+const waterMat=mat(stage===3?0xee7b42:0x67cbde);if(stage===0||stage===2){box(levelGroup,waterMat,-22,-.4,-12,12,.03,88);box(levelGroup,waterMat,22,-.4,-12,12,.03,88);}
+baseCastle=createCastle();const siege=box(levelGroup,mat(0xbe7889),0,.61,-35,10,.9,4.5);
+const positions=[[-2.36,2.36],[-2.36,2.36],[-2.36,2.36],[-2.36,2.36],[-2.36,2.36]];
+let a=[2,3,2,4,3][stage],b=[3,2,4,3,5][stage];stageGate.push(createGate(positions[stage][0],-6,a));stageGate.push(createGate(positions[stage][1],-6,b));stageGate.push(createGate(-2.36,-20,2));stageGate.push(createGate(2.36,-20,[2,3,3,4,4][stage]));
+if(stage>=2){const pillar=mat(stage===3?0x55405c:0x9997a4);for(let x of [-3.2,3.2]){cylinderMesh(levelGroup,pillar,x,1.25,-27,.7,2.5,.7);ball(levelGroup,accent,x,2.75,-27,.87,.5,.87);}}
+makeCannon();
+for(let m of mobMesh){scene.remove(m);if(m.material&&m.material.dispose)m.material.dispose();}mobMesh=[];makeMobs();
+maxHp=28+stage*14;hp=maxHp;runTime=0;heroEnergy=0;fireCount=0;spawnClock=0;enemyClock=1;shots=0;touching=false;mode='menu';
+$('stagenum').textContent=stage+1;$('stagename').textContent=p.name;$('coins').textContent=coins;$('gems').textContent=gems;
+$('heroBtn').style.display=stage>=2?'flex':'none';
+}
+let cannon;
+function makeCannon(){cannon=new T.Group();const wheel=mat(0x243447),body=mat(0x247bd2),shine=mat(0x7bddfb),metal=mat(0x12355e),trim=mat(0xfed44d);
+for(let x of [-1.05,1.05]){const w=addMesh(cannon,new T.TorusGeometry(.54,.19,9,15),wheel,x,.56,.15,.95,.95,.95);w.rotation.y=Math.PI/2;ball(cannon,metal,x,.56,.15,.27);}box(cannon,body,0,.64,0,2.35,.85,1.75);ball(cannon,shine,0,1.33,-.25,1.14,.84,1.06);
+const turret=cylinderMesh(cannon,metal,0,1.6,-1.4,.54,3.2,.54);turret.rotation.x=Math.PI/2;turret.rotation.z=.02;const tip=cylinderMesh(cannon,trim,0,1.60,-2.92,.7,.55,.7);tip.rotation.x=Math.PI/2;
+for(let x of [-.64,.64]){ball(cannon,metal,x,1.55,-.65,.19,.22,.25);}
+let flags=box(cannon,trim,0,2.08,.56,1.3,.16,.24);cannon.position.set(aim,.25,16.1);levelGroup.add(cannon);}
+// Particle-displacement instancing: complete 3D soldiers with six rounded limbs/head/body, colored materials.
+const personParts=[{name:'body',s:[.32,.44,.23],p:[0,1.0,0]},{name:'head',s:[.33,.34,.31],p:[0,1.77,0]},{name:'armL',s:[.15,.32,.14],p:[-.40,1.02,0]},{name:'armR',s:[.15,.32,.14],p:[.40,1.02,0]},{name:'legL',s:[.16,.36,.17],p:[-.18,.37,0]},{name:'legR',s:[.16,.36,.17],p:[.18,.37,0]},{name:'helmet',s:[.34,.14,.33],p:[0,2.02,-.04]}];
+let inst=[];const MAX=200;
+function makeMobs(){inst=[];for(let team=0;team<2;team++){const meshes=[];personParts.forEach((p,i)=>{let color=i===1?0xffdfbc:(team?i===6?0xaa2146:i>=4?0xc83858:0xff4569:i===6?0x176ccb:i>=4?0x098dcf:0x0cbbff);let mesh=new T.InstancedMesh(i===6?cylinder:sphere,mat(color),MAX);mesh.instanceMatrix.setUsage(T.DynamicDrawUsage);mesh.count=0;mesh.castShadow=true;mesh.frustumCulled=false;scene.add(mesh);mobMesh.push(mesh);meshes.push(mesh);});inst.push(meshes);}}
+function renderMobs(team,units,now){const meshes=inst[team];for(let i=0;i<meshes.length;i++)meshes[i].count=Math.min(units.length,MAX);const n=Math.min(units.length,MAX);for(let j=0;j<n;j++){const u=units[j],speed=u.hero?7:13,w=Math.sin(now*speed+u.phase),bob=Math.abs(w)*.05,scale=u.hero?1.8:1,reverse=team?Math.PI:0;
+for(let i=0;i<personParts.length;i++){const part=personParts[i];let px=part.p[0],py=part.p[1]+bob,pz=part.p[2],angle=0;
+if(i===2||i===3){angle=(i===2?1:-1)*w*.43;pz+=(i===2?1:-1)*w*.15;}if(i===4||i===5){pz+=(i===4?1:-1)*w*.23;py=Math.max(.25,py+((i===4?1:-1)*w)*.06);}
+if(i===6)py+=.05;
+tmp.position.set(u.x+px*scale,u.y+py*scale,u.z+(team?-pz:pz)*scale);tmp.rotation.set(0,reverse,angle);tmp.scale.set(part.s[0]*scale,part.s[1]*scale,part.s[2]*scale);tmp.updateMatrix();meshes[i].setMatrixAt(j,tmp.matrix);}}
+meshes.forEach(m=>{m.instanceMatrix.needsUpdate=true;});}
+function blast(x,z,color=0x22dfff,n=9){const material=new T.MeshBasicMaterial({color});for(let i=0;i<n&&particle.length<100;i++){const m=new T.Mesh(sphere,material);m.scale.setScalar(random(.09,.21));m.position.set(x,random(.5,1.3),z);scene.add(m);particle.push({mesh:m,vx:random(-3,3),vy:random(2,6),vz:random(-3,3),life:random(.4,.85)});}}
+function newSoldier(team,x,z,hero=false){const collection=team?red:blue;if(collection.length>=MAX-1)return;collection.push({x:x+random(-.17,.17),z:z+random(-.08,.08),y:0,phase:random(0,6.28),hero,mask:0,power:hero?5:1,health:hero?5:1});}
+function popup(message){$('toast').textContent=message;$('toast').classList.add('show');toastTime=performance.now()+1200;}
+function playFx(type){try{const C=window.AudioContext||window.webkitAudioContext;if(!C)return;if(!window.ctx)window.ctx=new C();const ctx=window.ctx;if(ctx.state==='suspended')ctx.resume();let t=ctx.currentTime,o=ctx.createOscillator(),gain=ctx.createGain();o.type=type===0?'sine':type===1?'triangle':'sawtooth';o.frequency.setValueAtTime(type===0?360:type===1?640:115,t);o.frequency.exponentialRampToValueAtTime(type===0?135:type===1?920:45,t+.15);gain.gain.setValueAtTime(type===0?.034:type===1?.07:.09,t);gain.gain.exponentialRampToValueAtTime(.001,t+.17);o.connect(gain);gain.connect(ctx.destination);o.start(t);o.stop(t+.19);}catch(e){}}
+function confetti(){for(let i=0;i<36;i++)blast(random(-4,4),random(-25,-40),[0x31f9fc,0xffc82a,0xff5685][i%3],4);}
+function win(){if(mode!=='playing')return;mode='won';touching=false;coins+=80+(stage+1)*60;gems+=2;try{localStorage.setItem('cerco_coins',coins);}catch(e){}playFx(1);confetti();setTimeout(()=>showDialog('VITÓRIA! 🏆','Castelo conquistado! +'+(80+(stage+1)*60)+' moedas • +2 gemas','PRÓXIMA FASE ▶'),400);}
+function lose(){if(mode!=='playing')return;mode='lost';touching=false;playFx(2);setTimeout(()=>showDialog('BASE INVADIDA!','As tropas vermelhas alcançaram o canhão. Multiplique os soldados pelos portais para resistir.','TENTAR NOVAMENTE ↻'),450);}
+function showDialog(title,subtitle,button){$('title').innerHTML=title;$('subtitle').textContent=subtitle;$('play').textContent=button;$('badge').textContent='FASE '+(stage+1)+' • '+palettes[stage].name;$('modal').style.display='flex';}
+function start(){if(mode==='won'){stage=(stage+1)%5;try{localStorage.setItem('cerco_stage',stage);}catch(e){}makeLevel();}else if(mode==='lost'){makeLevel();}mode='playing';$('modal').style.display='none';popup('DERROTE A FORTALEZA!');touching=false;}
+$('play').addEventListener('pointerdown',ev=>{ev.stopPropagation();});$('play').addEventListener('click',start);
+$('heroBtn').addEventListener('pointerdown',e=>e.stopPropagation());$('heroBtn').addEventListener('click',ev=>{ev.stopPropagation();if(mode==='playing'&&heroEnergy>=100){newSoldier(0,aim,12,true);heroEnergy=0;playFx(1);popup('CAMPEÃO NA BATALHA!');}});
+function touchAim(clientX){aim=Math.max(-3.7,Math.min(3.7,((clientX/innerWidth)-.5)*10));if(cannon)cannon.position.x=aim;}
+renderer.domElement.addEventListener('pointerdown',e=>{if(mode==='playing'){touchAim(e.clientX);touching=true;renderer.domElement.setPointerCapture(e.pointerId);if(window.ctx)window.ctx.resume();}});
+renderer.domElement.addEventListener('pointermove',e=>{if(mode==='playing'&&touching)touchAim(e.clientX);});window.addEventListener('pointerup',()=>touching=false);window.addEventListener('pointercancel',()=>touching=false);
+function update(dt,now){runTime+=dt;spawnClock-=dt;enemyClock-=dt;if(touching&&spawnClock<=0){spawnClock=.12-(stage*.006);newSoldier(0,aim,12.5);heroEnergy=Math.min(100,heroEnergy+1.2);shots++;if(shots%3===0)playFx(0);}
+if(enemyClock<=0){enemyClock=Math.max(.6,1.7-stage*.15);for(let i=0;i<1+Math.floor(stage/2);i++)newSoldier(1,random(-3.3,3.3),-34.7);}
+// Gate movement begins at stage 4, matching the visible collision volumes.
+for(let g of stageGate){if(stage>=3){g.x=g.baseX+Math.sin(runTime*(stage===4?.8:.55)+g.z*.1)*.45;g.g.position.x=g.x;}}
+const born=[];
+for(let i=blue.length-1;i>=0;i--){let u=blue[i],old=u.z;u.z-=dt*(u.hero?6.9:8.4);u.phase+=dt*.18;
+for(let k=0;k<stageGate.length;k++){let g=stageGate[k];if(!(u.mask&(1<<k))&&old>g.z&&u.z<=g.z){u.mask|=(1<<k);if(Math.abs(u.x-g.x)<1.3){let extras=g.mult-1;for(let j=0;j<extras;j++)if(blue.length+born.length<MAX-1)born.push({x:Math.max(-4,Math.min(4,u.x+random(-.58,.58))),z:u.z+random(-.38,.38),y:0,phase:random(0,6.28),hero:false,mask:u.mask,power:1,health:1});if(born.length) {heroEnergy=Math.min(100,heroEnergy+2);if(Math.random()<.2)playFx(1);}}}}
+if(u.z<-37.2){hp-=u.power;blue.splice(i,1);blast(u.x,-37,0xffdc67,3);if(hp<=0){win();break;}}
+}
+if(mode!=='playing')return;blue.push(...born);
+for(let i=red.length-1;i>=0;i--){let u=red[i];u.z+=dt*(2.65+stage*.24);if(u.z>=13){red.splice(i,1);blast(u.x,14,0xff486d,8);lose();break;}}
+for(let i=blue.length-1;i>=0;i--){let u=blue[i],hit=-1;for(let j=red.length-1;j>=0;j--){let e=red[j],dx=u.x-e.x,dz=u.z-e.z;if(dx*dx+dz*dz<(u.hero?1.55:.50)){hit=j;break;}}if(hit>=0){const e=red[hit];red.splice(hit,1);u.health-=1;if(u.health<=0)blue.splice(i,1);blast(u.x,u.z,0xffc953,u.hero?8:3);if(Math.random()<.12)playFx(2);}}
+}
+function updateVisuals(dt,now){if(mode==='playing')update(dt,now);renderMobs(0,blue,runTime);renderMobs(1,red,runTime+1);
+if(cannon){cannon.position.x=aim;cannon.rotation.y=Math.sin(runTime*3)*.01;}
+for(let i=particle.length-1;i>=0;i--){let p=particle[i];p.life-=dt;p.mesh.position.x+=p.vx*dt;p.mesh.position.y+=p.vy*dt;p.mesh.position.z+=p.vz*dt;p.vy-=15*dt;p.mesh.scale.multiplyScalar(1-dt*.35);if(p.life<=0||p.mesh.position.y<0){scene.remove(p.mesh);particle.splice(i,1);}}
+if(mode==='playing'&&now-lastUpdateHUD>150){$('blue').textContent=blue.length;$('red').textContent=red.length;$('coins').textContent=coins;$('gems').textContent=gems;$('stagefill').style.width=Math.max(0,(1-hp/maxHp)*100)+'%';const btn=$('heroBtn');btn.disabled=heroEnergy<100;btn.querySelector('small').textContent=heroEnergy<100?'CARGA '+Math.floor(heroEnergy)+'%':'CONVOCAR';lastUpdateHUD=now;}
+if(toastTime&&now>toastTime){$('toast').classList.remove('show');toastTime=0;}
+}
+function frame(now){const dt=Math.min(.036,(now-last)/1000);last=now;try{updateVisuals(dt,now);renderer.render(scene,camera);}catch(err){console.error('game frame',err);}$('fps').textContent='FPS '+Math.round(1/Math.max(dt,.01));requestAnimationFrame(frame);}
+window.addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));});
+makeLevel();showDialog('CERCO DAS<br>TROPAS','Um jogo 3D de multidões, portais multiplicadores, combates e conquista de castelos. Cinco fases com cenários diferentes.','JOGAR AGORA ▶');requestAnimationFrame(frame);
+})();
+</script></body></html>
