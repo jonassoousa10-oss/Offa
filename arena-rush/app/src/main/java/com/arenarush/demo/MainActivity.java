@@ -94,6 +94,8 @@ public class MainActivity extends Activity {
       p.setShader(new LinearGradient(0,0,0,118,0xD908203A,0x0008203A,Shader.TileMode.CLAMP));c.drawRect(0,0,ww,118,p);p.setShader(null);
       label(c,"ARENA",20,43,32,0xFFFFFFFF,false);
       label(c,"RUSH 3D",21,66,16,0xFF58E4FF,false);
+      String[] lands={"VALE VERDE","DESERTO DOURADO","REINO GELADO","TERRA VULCÂNICA","PLANETA NÉON"};
+      label(c,lands[engine.stage],20,88,11,0xFFE6FBFF,false);
       round(c,0xC90B223B,ww-144,18,ww-16,77,15);
       label(c,"FASE "+(engine.stage+1)+"/5",ww-80,43,20,0xFFFFFFFF,true);
       label(c,"BASE "+Math.max(0,engine.baseHP)+" PV",ww-80,65,13,0xFFFFD685,true);
@@ -280,7 +282,8 @@ public class MainActivity extends Activity {
       for(int k=0;k<7&&fx.size()<90;k++)fx.add(new Spark(x,z,rnd,color));
     }
     void drawGround(){
-      draw(cube,0,-.35f,-15,64,.4f,90,0,new float[]{.34f,.67f,.48f});
+      float[][] terrains={{.34f,.67f,.48f},{.78f,.64f,.40f},{.55f,.75f,.84f},{.46f,.34f,.33f},{.40f,.42f,.67f}};
+      draw(cube,0,-.35f,-15,64,.4f,90,0,terrains[stage]);
       draw(cube,0,-.12f,-12,10,.22f,53,0,new float[]{.24f,.29f,.38f});
       draw(cube,0,-.02f,-12,.1f,.04f,50,0,new float[]{.44f,.59f,.61f});
       for(int z=-37;z<13;z+=4){
@@ -302,8 +305,10 @@ public class MainActivity extends Activity {
     }
     void tree(float x,float z,int seed) {
       draw(cylinder,x,.55f,z,.42f,1.4f,.42f,0,new float[]{.51f,.35f,.24f});
-      draw(sphere,x,1.7f,z,1.1f,1.25f,1.1f,0,new float[]{.08f,.48f+(seed%3)*.05f,.34f});
-      draw(sphere,x-.38f,2.0f,z,.55f,.75f,.6f,0,new float[]{.12f,.60f,.38f});
+      float[][] greens={{.08f,.48f,.34f},{.68f,.51f,.21f},{.49f,.75f,.87f},{.52f,.27f,.20f},{.42f,.33f,.76f}};
+      float[] foliage=greens[stage];
+      draw(sphere,x,1.7f,z,1.1f,1.25f,1.1f,0,foliage);
+      draw(sphere,x-.38f,2.0f,z,.55f,.75f,.6f,0,foliage);
     }
     void drawFort(){
       float bz=-37.2f;
@@ -329,7 +334,7 @@ public class MainActivity extends Activity {
     void drawCannon(){
       draw(cylinder,aim,.25f,11,1.35f,.65f,1.3f,0,DARK);
       draw(sphere,aim,.95f,11,.95f,.9f,1f,0,BLU);
-      draw(cylinder,aim,1.08f,9.85f,.4f,.49f,2.3f,90,new float[]{.24f,.68f,.91f});
+      draw(cube,aim,1.08f,9.85f,.37f,.36f,1.40f,0,new float[]{.24f,.68f,.91f});
       draw(sphere,aim,1.08f,8.68f,.47f,.45f,.47f,0,new float[]{.13f,.26f,.36f});
       if(shotFlash>0)draw(sphere,aim,1.08f,8.24f,.65f,.65f,.65f,0,new float[]{1f,.92f,.25f});
     }
