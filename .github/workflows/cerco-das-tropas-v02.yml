@@ -1,0 +1,72 @@
+name: Cerco das Tropas 3D v0.2 - APK temporario
+on:
+  push:
+    branches: [cerco-das-tropas-3d-v02]
+    paths:
+      - 'cerco-das-tropas/**'
+      - '.github/workflows/cerco-das-tropas-v02.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 24
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: SDK Android preinstalado no runner
+        run: |
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager | head -1)
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+          "$SDKMANAGER" "platforms;android-35" "build-tools;35.0.0" >/dev/null
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.10.2'
+          cache-disabled: true
+      - name: Instalar Three.js original (licenca MIT) no aplicativo
+        run: |
+          set -e
+          FILE=cerco-das-tropas/app/src/main/assets/three.min.js
+          curl --fail -L --retry 3 --max-time 60 -s https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js -o "$FILE" || curl --fail -L --retry 3 --max-time 60 -s https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js -o "$FILE"
+          test $(wc -c < "$FILE") -gt 300000
+          grep -q 'THREE' "$FILE"
+      - name: Validar sintaxe JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          s=Path('cerco-das-tropas/app/src/main/assets/index.html').read_text()
+          a=s.index('<script>')+len('<script>')
+          b=s.rindex('</script>')
+          Path('/tmp/cerco-game.js').write_text(s[a:b])
+          PY
+          node --check /tmp/cerco-game.js
+      - name: Compilar APK debug Android
+        working-directory: cerco-das-tropas
+        run: gradle assembleDebug --no-daemon --stacktrace
+      - name: Tentar screenshot do menu no navegador (nao bloqueante)
+        continue-on-error: true
+        run: |
+          CHROME=$(command -v google-chrome || command -v chromium || true)
+          if [ -n "$CHROME" ]; then
+            timeout 25 "$CHROME" --headless=new --disable-gpu --enable-unsafe-swiftshader --no-sandbox --hide-scrollbars --allow-file-access-from-files --disable-dev-shm-usage --virtual-time-budget=5000 --window-size=480,960 --screenshot=/tmp/cerco-preview.png "file://$GITHUB_WORKSPACE/cerco-das-tropas/app/src/main/assets/index.html" || true
+            if [ -s /tmp/cerco-preview.png ]; then cp /tmp/cerco-preview.png cerco-das-tropas/preview.png; fi
+          fi
+      - name: Publicar APK (apaga em 1 dia)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CercoDasTropas3D-v02-debug-apk
+          path: cerco-das-tropas/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Publicar captura se existir
+        uses: actions/upload-artifact@v4
+        with:
+          name: CercoDasTropas3D-v02-previa
+          path: cerco-das-tropas/preview.png
+          if-no-files-found: ignore
+          retention-days: 1
