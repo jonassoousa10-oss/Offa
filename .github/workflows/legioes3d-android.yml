@@ -69,6 +69,16 @@ jobs:
           mkdir -p build
           timeout 220 godot --headless --editor --path . --import 2>&1 | tee build/import.log
           if grep -E '^SCRIPT ERROR|Parse Error:|ERROR: .*Parse' build/import.log; then exit 1; fi
+      - name: Testar abertura e logica do jogo por 90 quadros
+        working-directory: legioes3d
+        run: |
+          set -eo pipefail
+          timeout 50 godot --headless --path . --quit-after 90 2>&1 | tee build/smoke.log
+          if grep -E 'SCRIPT ERROR|Invalid call\.|Invalid access|Parse Error|Cannot open file|Nonexistent function' build/smoke.log; then
+            echo 'Falha de runtime no jogo, nao distribuir APK.'
+            exit 1
+          fi
+          echo 'SMOKE TEST: cena abriu, sem erro de script.'
       - name: Exportar APK Android ARM64
         env:
           GODOT_ANDROID_KEYSTORE_DEBUG_PATH: /tmp/godot-debug.keystore
