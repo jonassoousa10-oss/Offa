@@ -62,8 +62,8 @@ jobs:
           from pathlib import Path
           p=Path('cerco-das-tropas/app/src/main/assets/index.html')
           s=p.read_text()
-          before='requestAnimationFrame(frame);\\n})();'
-          after="requestAnimationFrame(frame);setTimeout(()=>{document.getElementById('play').click();touching=true;aim=2.0;},120);\\n})();"
+          before='requestAnimationFrame(frame);\n})();'
+          after="requestAnimationFrame(frame);setTimeout(()=>{document.getElementById('play').click();touching=true;aim=2.0;},120);\n})();"
           if before in s:
               Path('cerco-das-tropas/app/src/main/assets/gameplay-preview.html').write_text(s.replace(before,after))
           PY
