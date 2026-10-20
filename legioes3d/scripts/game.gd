@@ -93,9 +93,9 @@ func _make_camera() -> void:
     camera.near = 0.1
     camera.far = 150.0
     camera.position = Vector3(0, 28.0, 24.0)
+    add_child(camera)
     camera.look_at(Vector3(0, 0, -15.0), Vector3.UP)
     camera.current = true
-    add_child(camera)
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-50, -35, 8)
     sun.light_color = Color("fff4d8")
