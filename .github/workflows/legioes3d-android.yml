@@ -74,7 +74,7 @@ jobs:
         run: |
           set -eo pipefail
           timeout 50 godot --headless --path . --quit-after 90 2>&1 | tee build/smoke.log
-          if grep -E 'SCRIPT ERROR|Invalid call\.|Invalid access|Parse Error|Cannot open file|Nonexistent function' build/smoke.log; then
+          if grep -E '^ERROR:|SCRIPT ERROR|Invalid call\.|Invalid access|Parse Error|Cannot open file|Nonexistent function' build/smoke.log; then
             echo 'Falha de runtime no jogo, nao distribuir APK.'
             exit 1
           fi
