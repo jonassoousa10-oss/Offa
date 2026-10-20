@@ -4,6 +4,7 @@ config_version=5
 config/name="Legiões 3D - Invasão"
 run/main_scene="res://scenes/main.tscn"
 config/description="Jogo nativo 3D de estratégia e multidões"
+config/icon="res://icon.svg"
 [display]
 window/size/viewport_width=540
 window/size/viewport_height=960
