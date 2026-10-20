@@ -32,9 +32,9 @@ const palettes=[
 ];
 let stage=0,mode='menu',coins=0,gems=20,spawnClock=0,enemyClock=0,fireCount=0,aim=0,shots=0,heroEnergy=0,hp=30,maxHp=30,runTime=0,last=performance.now(),touching=false,levelGroup,stageGate=[],baseCastle,gateObjects=[],particle=[],blue=[],red=[],mobMesh=[],frames=0,lastUpdateHUD=0,toastTime=0;
 try{stage=Math.max(0,Math.min(4,parseInt(localStorage.getItem('cerco_stage')||'0')))||0;coins=parseInt(localStorage.getItem('cerco_coins')||'0')||0;}catch(e){}
-const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;$('game').appendChild(renderer.domElement);
-const scene=new T.Scene();scene.fog=new T.Fog(0xb8e3f4,46,125);const camera=new T.PerspectiveCamera(45,innerWidth/innerHeight,.1,180);camera.position.set(0,29,28);camera.lookAt(0,0,-10);
-scene.add(new T.HemisphereLight(0xffffff,0x658090,1.25));const sun=new T.DirectionalLight(0xfff4d9,2.4);sun.position.set(-18,30,17);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-28;sun.shadow.camera.right=28;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-52;sun.shadow.camera.near=.5;sun.shadow.camera.far=125;sun.shadow.bias=-.0005;scene.add(sun);
+const renderer=new T.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.35));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=T.PCFSoftShadowMap;renderer.outputEncoding=T.sRGBEncoding;renderer.toneMapping=T.NoToneMapping;renderer.toneMappingExposure=1.0;$('game').appendChild(renderer.domElement);
+const scene=new T.Scene();scene.fog=new T.Fog(0xb8e3f4,78,165);const camera=new T.PerspectiveCamera(45,innerWidth/innerHeight,.1,180);camera.position.set(0,31,35);camera.lookAt(0,0,-7);
+scene.add(new T.HemisphereLight(0xffffff,0x658090,.75));const sun=new T.DirectionalLight(0xfff4d9,1.35);sun.position.set(-18,30,17);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-28;sun.shadow.camera.right=28;sun.shadow.camera.top=32;sun.shadow.camera.bottom=-52;sun.shadow.camera.near=.5;sun.shadow.camera.far=125;sun.shadow.bias=-.0005;scene.add(sun);
 const mats={blue:new T.MeshStandardMaterial({color:0x00a8ff,roughness:.35,metalness:.08}),lightblue:new T.MeshStandardMaterial({color:0x64d9ff,roughness:.4}),blueDark:new T.MeshStandardMaterial({color:0x1261b7,roughness:.48}),red:new T.MeshStandardMaterial({color:0xfc5272,roughness:.4}),redDark:new T.MeshStandardMaterial({color:0xb82948,roughness:.55}),gold:new T.MeshStandardMaterial({color:0xffbf36,metalness:.25,roughness:.3}),skin:new T.MeshStandardMaterial({color:0xffd9a7,roughness:.58}),white:new T.MeshStandardMaterial({color:0xffffff,roughness:.5}),black:new T.MeshStandardMaterial({color:0x15243d,roughness:.45}),grass:new T.MeshStandardMaterial({color:0x80d896,roughness:1}),stone:new T.MeshStandardMaterial({color:0xc0a1ac,roughness:.8}),water:new T.MeshStandardMaterial({color:0x57c2e2,roughness:.25,transparent:true,opacity:.88})};
 const cube=new T.BoxGeometry(1,1,1),sphere=new T.SphereGeometry(1,10,8),hiSphere=new T.SphereGeometry(1,16,12),cylinder=new T.CylinderGeometry(.5,.5,1,12),cone=new T.ConeGeometry(1,1,7),disc=new T.CylinderGeometry(1,1,.015,12);
 let tmp=new T.Object3D(),q=new T.Quaternion(),ax=new T.Vector3(0,0,1);const random=(a,b)=>a+Math.random()*(b-a);
@@ -83,7 +83,7 @@ function makeCannon(){cannon=new T.Group();const wheel=mat(0x243447),body=mat(0x
 for(let x of [-1.05,1.05]){const w=addMesh(cannon,new T.TorusGeometry(.54,.19,9,15),wheel,x,.56,.15,.95,.95,.95);w.rotation.y=Math.PI/2;ball(cannon,metal,x,.56,.15,.27);}box(cannon,body,0,.64,0,2.35,.85,1.75);ball(cannon,shine,0,1.33,-.25,1.14,.84,1.06);
 const turret=cylinderMesh(cannon,metal,0,1.6,-1.4,.54,3.2,.54);turret.rotation.x=Math.PI/2;turret.rotation.z=.02;const tip=cylinderMesh(cannon,trim,0,1.60,-2.92,.7,.55,.7);tip.rotation.x=Math.PI/2;
 for(let x of [-.64,.64]){ball(cannon,metal,x,1.55,-.65,.19,.22,.25);}
-let flags=box(cannon,trim,0,2.08,.56,1.3,.16,.24);cannon.position.set(aim,.25,16.1);levelGroup.add(cannon);}
+let flags=box(cannon,trim,0,2.08,.56,1.3,.16,.24);cannon.position.set(aim,.25,13.6);levelGroup.add(cannon);}
 // Particle-displacement instancing: complete 3D soldiers with six rounded limbs/head/body, colored materials.
 const personParts=[{name:'body',s:[.32,.44,.23],p:[0,1.0,0]},{name:'head',s:[.33,.34,.31],p:[0,1.77,0]},{name:'armL',s:[.15,.32,.14],p:[-.40,1.02,0]},{name:'armR',s:[.15,.32,.14],p:[.40,1.02,0]},{name:'legL',s:[.16,.36,.17],p:[-.18,.37,0]},{name:'legR',s:[.16,.36,.17],p:[.18,.37,0]},{name:'helmet',s:[.34,.14,.33],p:[0,2.02,-.04]}];
 let inst=[];const MAX=200;
@@ -104,11 +104,11 @@ function lose(){if(mode!=='playing')return;mode='lost';touching=false;playFx(2);
 function showDialog(title,subtitle,button){$('title').innerHTML=title;$('subtitle').textContent=subtitle;$('play').textContent=button;$('badge').textContent='FASE '+(stage+1)+' • '+palettes[stage].name;$('modal').style.display='flex';}
 function start(){if(mode==='won'){stage=(stage+1)%5;try{localStorage.setItem('cerco_stage',stage);}catch(e){}makeLevel();}else if(mode==='lost'){makeLevel();}mode='playing';$('modal').style.display='none';popup('DERROTE A FORTALEZA!');touching=false;}
 $('play').addEventListener('pointerdown',ev=>{ev.stopPropagation();});$('play').addEventListener('click',start);
-$('heroBtn').addEventListener('pointerdown',e=>e.stopPropagation());$('heroBtn').addEventListener('click',ev=>{ev.stopPropagation();if(mode==='playing'&&heroEnergy>=100){newSoldier(0,aim,12,true);heroEnergy=0;playFx(1);popup('CAMPEÃO NA BATALHA!');}});
+$('heroBtn').addEventListener('pointerdown',e=>e.stopPropagation());$('heroBtn').addEventListener('click',ev=>{ev.stopPropagation();if(mode==='playing'&&heroEnergy>=100){newSoldier(0,aim,10,true);heroEnergy=0;playFx(1);popup('CAMPEÃO NA BATALHA!');}});
 function touchAim(clientX){aim=Math.max(-3.7,Math.min(3.7,((clientX/innerWidth)-.5)*10));if(cannon)cannon.position.x=aim;}
 renderer.domElement.addEventListener('pointerdown',e=>{if(mode==='playing'){touchAim(e.clientX);touching=true;renderer.domElement.setPointerCapture(e.pointerId);if(window.ctx)window.ctx.resume();}});
 renderer.domElement.addEventListener('pointermove',e=>{if(mode==='playing'&&touching)touchAim(e.clientX);});window.addEventListener('pointerup',()=>touching=false);window.addEventListener('pointercancel',()=>touching=false);
-function update(dt,now){runTime+=dt;spawnClock-=dt;enemyClock-=dt;if(touching&&spawnClock<=0){spawnClock=.12-(stage*.006);newSoldier(0,aim,12.5);heroEnergy=Math.min(100,heroEnergy+1.2);shots++;if(shots%3===0)playFx(0);}
+function update(dt,now){runTime+=dt;spawnClock-=dt;enemyClock-=dt;if(touching&&spawnClock<=0){spawnClock=.12-(stage*.006);newSoldier(0,aim,10.5);heroEnergy=Math.min(100,heroEnergy+1.2);shots++;if(shots%3===0)playFx(0);}
 if(enemyClock<=0){enemyClock=Math.max(.6,1.7-stage*.15);for(let i=0;i<1+Math.floor(stage/2);i++)newSoldier(1,random(-3.3,3.3),-34.7);}
 // Gate movement begins at stage 4, matching the visible collision volumes.
 for(let g of stageGate){if(stage>=3){g.x=g.baseX+Math.sin(runTime*(stage===4?.8:.55)+g.z*.1)*.45;g.g.position.x=g.x;}}
@@ -118,7 +118,7 @@ for(let k=0;k<stageGate.length;k++){let g=stageGate[k];if(!(u.mask&(1<<k))&&old>
 if(u.z<-37.2){hp-=u.power;blue.splice(i,1);blast(u.x,-37,0xffdc67,3);if(hp<=0){win();break;}}
 }
 if(mode!=='playing')return;blue.push(...born);
-for(let i=red.length-1;i>=0;i--){let u=red[i];u.z+=dt*(2.65+stage*.24);if(u.z>=13){red.splice(i,1);blast(u.x,14,0xff486d,8);lose();break;}}
+for(let i=red.length-1;i>=0;i--){let u=red[i];u.z+=dt*(2.65+stage*.24);if(u.z>=10.4){red.splice(i,1);blast(u.x,14,0xff486d,8);lose();break;}}
 for(let i=blue.length-1;i>=0;i--){let u=blue[i],hit=-1;for(let j=red.length-1;j>=0;j--){let e=red[j],dx=u.x-e.x,dz=u.z-e.z;if(dx*dx+dz*dz<(u.hero?1.55:.50)){hit=j;break;}}if(hit>=0){const e=red[hit];red.splice(hit,1);u.health-=1;if(u.health<=0)blue.splice(i,1);blast(u.x,u.z,0xffc953,u.hero?8:3);if(Math.random()<.12)playFx(2);}}
 }
 function updateVisuals(dt,now){if(mode==='playing')update(dt,now);renderMobs(0,blue,runTime);renderMobs(1,red,runTime+1);
